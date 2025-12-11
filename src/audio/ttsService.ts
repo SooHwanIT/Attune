@@ -36,9 +36,10 @@ let analyser: AnalyserNode | null = null;
 let source: AudioBufferSourceNode | null = null;
 
 export const playAudio = async (audioData: ArrayBuffer, onEnded: () => void) => {
-  if (!audioContext) audioContext = new (window.AudioContext |
-
-| (window as any).webkitAudioContext)();
+  // ▼ 수정된 부분: 줄바꿈 없이 || 연산자를 올바르게 사용
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
   
   const audioBuffer = await audioContext.decodeAudioData(audioData);
   
