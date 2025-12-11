@@ -1,4 +1,4 @@
-import React from "react";
+
 import {
   LineChart,
   Line,
@@ -15,7 +15,6 @@ import {
 } from "recharts";
 import { 
   Download, 
-  Share2, 
   Calendar, 
   TrendingUp, 
   Activity, 
