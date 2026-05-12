@@ -44,10 +44,6 @@ export default defineConfig({
             return 'icons';
           }
 
-          if (id.includes('zustand')) {
-            return 'state';
-          }
-
           if (id.includes('axios')) {
             return 'http';
           }
