@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 상담 서비스 중간 발표</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #f7f9f3;
+      --bg-2: #e9f2df;
+      --ink: #10221a;
+      --muted: #4d6458;
+      --brand: #1f8a4c;
+      --brand-2: #0f5d31;
+      --card: rgba(255, 255, 255, 0.78);
+      --line: rgba(16, 34, 26, 0.12);
+      --accent: #f2a900;
+      --danger: #c0392b;
+      --radius: 20px;
+      --shadow: 0 20px 60px rgba(31, 52, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at -10% -10%, #d7ecc7 0%, transparent 60%),
+        radial-gradient(900px 500px at 110% 110%, #d3e5f6 0%, transparent 60%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      font-family: "Noto Sans KR", sans-serif;
+      overflow: hidden;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(16,34,26,0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(16,34,26,0.04) 1px, transparent 1px);
+      background-size: 36px 36px;
+      mask-image: radial-gradient(circle at center, black 25%, transparent 95%);
+    }
+
+    .deck {
+      position: relative;
+      width: min(1200px, 94vw);
+      height: min(86vh, 820px);
+      margin: 4vh auto;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 6px);
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .topbar {
+      height: 62px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(245,250,242,0.8));
+    }
+
+    .title-wrap { display: flex; align-items: center; gap: 10px; }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--brand);
+      box-shadow: 0 0 0 6px rgba(31, 138, 76, 0.14);
+    }
+
+    .deck-title {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: 0.02em;
+      font-size: 14px;
+      font-weight: 700;
+      color: #163427;
+      text-transform: uppercase;
+    }
+
+    .counter {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .progress {
+      height: 4px;
+      width: 100%;
+      background: rgba(16,34,26,0.08);
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 10%;
+      background: linear-gradient(90deg, var(--brand), #35b86f);
+      transition: width 320ms ease;
+    }
+
+    .slides {
+      position: relative;
+      width: 100%;
+      height: calc(100% - 66px);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 24px;
+      padding: 34px 34px 28px;
+      opacity: 0;
+      transform: translateX(32px) scale(0.98);
+      transition: all 360ms ease;
+      pointer-events: none;
+    }
+
+    .slide.active {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .slide-left {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    .tag {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      border: 1px solid rgba(16,34,26,0.18);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+      color: #1a4732;
+      background: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      line-height: 1.2;
+      font-size: clamp(28px, 3.2vw, 46px);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(14px, 1.8vw, 18px);
+      line-height: 1.6;
+      max-width: 90%;
+    }
+
+    .points {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .points li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.75);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .bullet {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      margin-top: 1px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: white;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    }
+
+    .talk {
+      margin-top: auto;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: rgba(255, 248, 227, 0.86);
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #5e4b17;
+    }
+
+    .slide-right {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(244,250,241,0.8));
+      position: relative;
+      overflow: hidden;
+      padding: 18px;
+    }
+
+    .panel-title {
+      margin: 0 0 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #1d4a35;
+    }
+
+    .panel-body {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #355444;
+    }
+
+    .flow { margin-top: 12px; display: grid; gap: 10px; }
+
+    .flow-step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: center;
+      background: rgba(255,255,255,0.84);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .flow-step .n {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #e4f4ea;
+      color: #1f7442;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    .chip {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.75);
+      color: #274637;
+      font-weight: 600;
+    }
+
+    .nav {
+      position: absolute;
+      right: 20px;
+      bottom: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid rgba(16,34,26,0.2);
+      background: rgba(255,255,255,0.84);
+      color: #173729;
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 160ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(16,34,26,0.35);
+      background: white;
+    }
+
+    .btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+    .footer-note {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      font-size: 11px;
+      color: #567363;
+      letter-spacing: 0.03em;
+    }
+
+    .risk {
+      border-left: 4px solid var(--danger);
+      background: rgba(255, 240, 239, 0.86);
+      color: #6d231a;
+    }
+
+    @media (max-width: 980px) {
+      .slide {
+        grid-template-columns: 1fr;
+        overflow: auto;
+        padding: 22px 20px 70px;
+      }
+      .subtitle { max-width: 100%; }
+      .deck { height: 92vh; width: 96vw; }
+      .talk { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <main class="deck">
+    <div class="topbar">
+      <div class="title-wrap">
+        <span class="dot"></span>
+        <h1 class="deck-title">AI Counseling Mid Review</h1>
+      </div>
+      <div class="counter"><span id="current">01</span> / 10</div>
+    </div>
+    <div class="progress"><span id="progress"></span></div>
+
+    <section class="slides" id="slides">
+      <article class="slide active">
+        <div class="slide-left">
+          <span class="tag">Slide 1</span>
+          <h2>문제 정의<br>상담이 끝나면 변화도 끝난다</h2>
+          <p class="subtitle">기존 디지털 상담은 공감에서 멈추는 경우가 많았습니다. 우리는 상담 직후 행동 변화까지 이어지는 흐름을 목표로 했습니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 사용자는 위로뿐 아니라 실행 가능한 다음 단계가 필요함</li>
+            <li><span class="bullet">2</span> 상담 전후가 분절되어 몰입과 지속성이 떨어짐</li>
+            <li><span class="bullet">3</span> 결과가 기록되지 않아 재방문 동기가 약함</li>
+          </ul>
+          <p class="talk">발표 멘트: 우리의 출발점은 기능 추가가 아니라, 상담 경험의 단절을 없애는 것이었습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Today Focus</h3>
+          <p class="panel-body">이번 발표는 구현 상세보다 사용자 흐름 관점에서 설명합니다.</p>
+          <div class="chip-row">
+            <span class="chip">흐름 중심</span>
+            <span class="chip">중간 점검</span>
+            <span class="chip">사용자 경험</span>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 2</span>
+          <h2>해결 전략<br>준비-대화-정리-실행의 연결</h2>
+          <p class="subtitle">하나의 기능이 아닌 4단계 연속 경험으로 제품을 구성했습니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 준비: 현재 상태를 먼저 구조화</li>
+            <li><span class="bullet">2</span> 대화: 실시간으로 몰입감 있는 상담 진행</li>
+            <li><span class="bullet">3</span> 정리: 종료 직후 인사이트 자동화</li>
+            <li><span class="bullet">4</span> 실행: 추천 콘텐츠로 후속 행동 유도</li>
+          </ul>
+          <p class="talk">발표 멘트: 저희가 만든 건 챗봇이 아니라, 사용자를 다음 행동으로 이끄는 파이프라인입니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Flow Blueprint</h3>
+          <div class="flow">
+            <div class="flow-step"><span class="n">01</span><span>사전 준비</span></div>
+            <div class="flow-step"><span class="n">02</span><span>실시간 상담</span></div>
+            <div class="flow-step"><span class="n">03</span><span>분석/회고</span></div>
+            <div class="flow-step"><span class="n">04</span><span>후속 실천</span></div>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 3</span>
+          <h2>사용자 여정<br>처음부터 끝까지 끊기지 않게</h2>
+          <p class="subtitle">상담 시작 전 입력부터 종료 후 인사이트 확인까지 하나의 경험으로 연결됩니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 상담 전: 오늘의 고민과 감정 상태를 정렬</li>
+            <li><span class="bullet">2</span> 상담 중: 사용자 반응 기반 대화 지속</li>
+            <li><span class="bullet">3</span> 상담 후: 즉시 결과 확인 및 다음 행동 제안</li>
+          </ul>
+          <p class="talk">발표 멘트: 사용자는 화면을 이동하지만, 경험은 단절되지 않습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Core Outcome</h3>
+          <p class="panel-body">사용자가 느끼는 핵심 가치는 즉시성, 몰입감, 지속성입니다.</p>
+          <div class="chip-row">
+            <span class="chip">즉시 시작</span>
+            <span class="chip">실시간 상호작용</span>
+            <span class="chip">종료 후 회고</span>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 4</span>
+          <h2>1단계: 준비 경험<br>상담 품질을 시작 전에 결정</h2>
+          <p class="subtitle">상담 품질은 첫 질문 이전에 결정됩니다. 준비 단계는 사용자와 시스템 모두의 맥락을 맞춥니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 사용자는 고민을 언어화하며 자기 상태를 명확히 함</li>
+            <li><span class="bullet">2</span> 시스템은 초기 맥락을 확보해 대화 정확도 향상</li>
+            <li><span class="bullet">3</span> 초반 어색한 탐색 시간을 줄이고 본론 진입</li>
+          </ul>
+          <p class="talk">발표 멘트: 준비 단계는 번거로움이 아니라, 상담의 정확도를 끌어올리는 장치입니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Why It Matters</h3>
+          <p class="panel-body">첫 1~2분의 품질이 전체 만족도를 크게 좌우합니다. 준비 단계는 이 구간을 최적화합니다.</p>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 5</span>
+          <h2>2단계: 실시간 상담<br>기술이 아닌 몰입을 전면에</h2>
+          <p class="subtitle">사용자가 컨트롤을 잃지 않으면서도 대화 흐름에 몰입할 수 있도록 설계했습니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 대화 상태가 명확히 보여 불확실성 감소</li>
+            <li><span class="bullet">2</span> 말하기/멈추기/종료 동작이 직관적</li>
+            <li><span class="bullet">3</span> 상담 도중 시각적 피드백으로 집중도 유지</li>
+          </ul>
+          <p class="talk">발표 멘트: 기술을 설명하지 않아도 사용자는 상담이 자연스럽다고 느끼는 것이 목표였습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Experience Principle</h3>
+          <div class="flow">
+            <div class="flow-step"><span class="n">A</span><span>상태를 숨기지 않는다</span></div>
+            <div class="flow-step"><span class="n">B</span><span>사용자 제어권을 유지한다</span></div>
+            <div class="flow-step"><span class="n">C</span><span>인지 부담을 줄인다</span></div>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 6</span>
+          <h2>3단계: 종료 후 가치<br>좋은 대화를 행동으로 전환</h2>
+          <p class="subtitle">상담 직후 결과가 구조화되어, 사용자는 자신의 변화와 핵심 포인트를 즉시 확인할 수 있습니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 대화가 기록으로 남아 회고 가능</li>
+            <li><span class="bullet">2</span> 감정 흐름과 핵심 주제 확인</li>
+            <li><span class="bullet">3</span> 다음 실행을 위한 콘텐츠 추천 연결</li>
+          </ul>
+          <p class="talk">발표 멘트: 상담이 끝나는 순간이 서비스 가치가 가장 커지는 순간이 되도록 설계했습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">User Benefit</h3>
+          <p class="panel-body">사용자는 오늘의 대화를 기억에 의존하지 않고, 정리된 형태로 다시 볼 수 있습니다.</p>
+          <div class="chip-row">
+            <span class="chip">회고 가능</span>
+            <span class="chip">핵심 요약</span>
+            <span class="chip">다음 행동</span>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 7</span>
+          <h2>중간 성과<br>무엇이 검증되었나</h2>
+          <p class="subtitle">현재 단계에서 가장 큰 성과는 전체 여정이 실제 사용자 경험으로 동작한다는 점입니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 준비-상담-분석 연결 흐름 검증</li>
+            <li><span class="bullet">2</span> 실시간 상담 인터랙션 완성도 확보</li>
+            <li><span class="bullet">3</span> 종료 이후 재활용 가능한 데이터 축적 구조 확보</li>
+          </ul>
+          <p class="talk">발표 멘트: 지금은 기술 데모 단계를 넘어 서비스 경험 검증 단계에 도달했습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Key Message</h3>
+          <p class="panel-body">핵심 MVP는 기능 개수가 아니라 사용자 여정의 완결성으로 판단했습니다.</p>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 8</span>
+          <h2>남은 과제<br>더 똑똑하고 안정적인 흐름으로</h2>
+          <p class="subtitle">중간 발표 이후에는 정밀도와 안정성을 강화해 실제 운영 가능 수준으로 올릴 계획입니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 상담 단계 전환의 정교함 강화</li>
+            <li><span class="bullet">2</span> 감정 반응 및 표현 다양성 확대</li>
+            <li><span class="bullet">3</span> 예외 상황 대응 및 운영 안정성 개선</li>
+          </ul>
+          <p class="talk risk">발표 멘트: 현재 리스크는 알고 있으며, 다음 스프린트에서 우선순위 기반으로 해결하겠습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Risk Control</h3>
+          <div class="flow">
+            <div class="flow-step"><span class="n">R1</span><span>흐름 정확도</span></div>
+            <div class="flow-step"><span class="n">R2</span><span>개인화 깊이</span></div>
+            <div class="flow-step"><span class="n">R3</span><span>운영 안정성</span></div>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 9</span>
+          <h2>다음 단계 계획<br>성능보다 변화율 중심</h2>
+          <p class="subtitle">다음 목표는 기술 튜닝보다 사용자의 실제 행동 변화율을 높이는 것입니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 개인화된 상담 흐름 설계 고도화</li>
+            <li><span class="bullet">2</span> 분석 기반 추천 정확도 강화</li>
+            <li><span class="bullet">3</span> 재방문 루프 설계로 지속 사용성 향상</li>
+          </ul>
+          <p class="talk">발표 멘트: 저희의 지표는 단순 사용 시간이 아니라, 상담 이후 실천으로 이어지는 비율입니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Next Sprint Theme</h3>
+          <p class="panel-body">Personalization, Reliability, Retention</p>
+          <div class="chip-row">
+            <span class="chip">개인화</span>
+            <span class="chip">안정성</span>
+            <span class="chip">재방문</span>
+          </div>
+        </aside>
+      </article>
+
+      <article class="slide">
+        <div class="slide-left">
+          <span class="tag">Slide 10</span>
+          <h2>결론<br>상담을 대화에서 변화로</h2>
+          <p class="subtitle">이 프로젝트의 가치는 고성능 모델이 아니라, 사용자 변화를 설계한 흐름에 있습니다.</p>
+          <ul class="points">
+            <li><span class="bullet">1</span> 핵심 가치: 즉시성, 몰입감, 지속성</li>
+            <li><span class="bullet">2</span> 중간 목표: End-to-End 경험 검증 완료</li>
+            <li><span class="bullet">3</span> 최종 방향: 변화를 축적하는 AI 상담 경험</li>
+          </ul>
+          <p class="talk">마무리 멘트: 저희는 잘 말하는 AI를 넘어, 사용자의 변화를 이어주는 상담 경험을 만들고 있습니다.</p>
+        </div>
+        <aside class="slide-right">
+          <h3 class="panel-title">Thank You</h3>
+          <p class="panel-body">Q&A에서 데모 흐름 중심으로 추가 설명드리겠습니다.</p>
+        </aside>
+      </article>
+    </section>
+
+    <div class="footer-note">조작: 방향키 좌/우, 버튼 클릭, 모바일 스와이프</div>
+    <div class="nav">
+      <button class="btn" id="prevBtn">이전</button>
+      <button class="btn" id="nextBtn">다음</button>
+    </div>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const currentEl = document.getElementById('current');
+    const progressEl = document.getElementById('progress');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    let index = 0;
+
+    function pad(n) {
+      return String(n).padStart(2, '0');
+    }
+
+    function render() {
+      slides.forEach((s, i) => s.classList.toggle('active', i === index));
+      currentEl.textContent = pad(index + 1);
+      progressEl.style.width = ((index + 1) / slides.length) * 100 + '%';
+      prevBtn.disabled = index === 0;
+      nextBtn.disabled = index === slides.length - 1;
+    }
+
+    function next() {
+      if (index < slides.length - 1) {
+        index += 1;
+        render();
+      }
+    }
+
+    function prev() {
+      if (index > 0) {
+        index -= 1;
+        render();
+      }
+    }
+
+    nextBtn.addEventListener('click', next);
+    prevBtn.addEventListener('click', prev);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') next();
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') prev();
+    });
+
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    window.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      const diff = touchStartX - touchEndX;
+      if (Math.abs(diff) > 40) {
+        if (diff > 0) next();
+        else prev();
+      }
+    }, { passive: true });
+
+    render();
+  </script>
+</body>
+</html>
