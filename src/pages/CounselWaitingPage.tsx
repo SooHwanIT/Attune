@@ -5,10 +5,8 @@ import {
   Bot,
   CheckCircle2,
   ClipboardList,
-  ListChecks,
   MessageCircleHeart,
   Shield,
-  Sparkles,
   Timer,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -20,12 +18,6 @@ interface LocationState {
 }
 
 interface StepType {
-  title: string;
-  desc: string;
-  icon: LucideIcon;
-}
-
-interface StrengthType {
   title: string;
   desc: string;
   icon: LucideIcon;
@@ -56,23 +48,24 @@ const TIPS = [
   "상담 중 종료하면 분석/리포트 페이지로 바로 이동해 결과를 확인할 수 있습니다.",
 ];
 
-const SERVICE_STRENGTHS: StrengthType[] = [
-  {
-    title: "사전 고민 기반 맞춤 상담",
-    desc: "사전에 입력한 고민/기분/상담 방식을 바탕으로 상담의 방향을 먼저 설계합니다.",
-    icon: ClipboardList,
-  },
-  {
-    title: "5단계 주도 진행",
-    desc: "단계별 목표를 기반으로 흐름을 이끌어, 막히지 않는 능동형 상담을 제공합니다.",
-    icon: Bot,
-  },
-  {
-    title: "단계별 누적 인사이트",
-    desc: "각 단계에서 핵심 내용을 요약/축적해 다음 단계 질문의 정확도를 높입니다.",
-    icon: ListChecks,
-  },
-];
+// SERVICE_STRENGTHS는 섹션이 주석 처리되어 사용되지 않아 제거됨
+// const SERVICE_STRENGTHS: StrengthType[] = [
+//   {
+//     title: "사전 고민 기반 맞춤 상담",
+//     desc: "사전에 입력한 고민/기분/상담 방식을 바탕으로 상담의 방향을 먼저 설계합니다.",
+//     icon: ClipboardList,
+//   },
+//   {
+//     title: "5단계 주도 진행",
+//     desc: "단계별 목표를 기반으로 흐름을 이끌어, 막히지 않는 능동형 상담을 제공합니다.",
+//     icon: Bot,
+//   },
+//   {
+//     title: "단계별 누적 인사이트",
+//     desc: "각 단계에서 핵심 내용을 요약/축적해 다음 단계 질문의 정확도를 높입니다.",
+//     icon: ListChecks,
+//   },
+// ];
 
 // 예시 질문(examples) 데이터가 추가된 5단계 로드맵
 const CBT_FIVE_STAGES = [
@@ -136,20 +129,7 @@ const CBT_FIVE_STAGES = [
 const ROADMAP_STEP_DURATION_MS = 6000;
 
 // --- Sub Components ---
-const StrengthCard = ({ item }: { item: StrengthType }) => {
-  const Icon = item.icon;
-  return (
-    <div className="group inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2.5 transition-all duration-200 hover:border-brand-green/30 hover:bg-brand-green/5">
-      <div className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green">
-        <Icon size={16} />
-      </div>
-      <div className="flex-1">
-        <p className="text-xs font-semibold text-slate-900">{item.title}</p>
-        <p className="text-[10px] leading-4 text-slate-500">{item.desc}</p>
-      </div>
-    </div>
-  );
-};
+// StrengthCard는 SERVICE_STRENGTHS 섹션이 주석 처리되어 사용되지 않아 제거됨
 
 const StepCard = ({ step, index }: { step: StepType; index: number }) => {
   const Icon = step.icon;

@@ -303,11 +303,11 @@ export default function SessionAnalysisPage() {
                   <h2 className="text-lg font-bold text-slate-900">AI 상담 인사이트</h2>
                 </div>
                 <AISessionInsight
-                  counselorMessage="오늘 상담을 통해 당신의 불안감이 실은 준비 부족에서 비롯된 게 아니라, 완벽함을 추구하는 당신의 강점이라는 걸 발견했어요. 그 에너지를 조금 더 자신감으로 바꿔보세요."
                   summary={{
-                    issue: "업무 회의에서의 불안감과 자기 의심",
-                    solution: "객관적 준비 상황 재평가 및 체크리스트 작성",
-                    promise: "회의 전 준비 사항을 일일이 확인하는 루틴 유지하기"
+                    emotion: { before: "불안함", after: "자신감" },
+                    story: "업무 회의에서의 불안감과 자기 의심",
+                    insight: "오늘 상담을 통해 당신의 불안감이 실은 준비 부족에서 비롯된 게 아니라, 완벽함을 추구하는 당신의 강점이라는 걸 발견했어요. 객관적 준비 상황 재평가 및 체크리스트 작성",
+                    action: "회의 전 준비 사항을 일일이 확인하는 루틴 유지하기"
                   }}
                 />
               </section>

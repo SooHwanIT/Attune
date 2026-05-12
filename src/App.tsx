@@ -31,11 +31,9 @@ export default function App() {
     const handleScroll = (e: Event) => {
       const target = e.target as HTMLElement;
       
-      // Target could be document in some cases, so fallback to documentElement
-      const element = target === document ? document.documentElement : target;
-
       // Only apply to actual Elements
-      if (!(element instanceof Element)) return;
+      if (!(target instanceof Element)) return;
+      const element = target;
 
       element.classList.add('is-scrolling');
 
