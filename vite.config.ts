@@ -28,10 +28,6 @@ export default defineConfig({
             return 'three-core';
           }
 
-          if (id.includes('@react-three/fiber') || id.includes('@react-three/drei')) {
-            return 'react-three';
-          }
-
           if (id.includes('recharts')) {
             return 'charts';
           }
