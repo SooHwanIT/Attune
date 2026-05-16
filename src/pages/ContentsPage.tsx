@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { apiClient } from "../utils/httpClient";
 
 // --- Types ---
 type Difficulty = "초급" | "중급" | "고급";
@@ -39,20 +40,42 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 
 const CATEGORIES = ["전체", ...Object.keys(CATEGORY_COLORS)];
 
-const RAW_POSTS: Omit<ContentPost, "id">[] = [
-  { title: "하루 10분 마음정리 루틴", excerpt: "과학 기반 마음챙김 명상으로 전전두엽 활성화 및 집중력 강화. 신경가소성을 활용한 뇌 회로 재구성 프로토콜.", category: "마음챙김", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop", keywords: ["마음챙김", "신경가소성", "전전두엽"], difficulty: "초급", duration: "10분" },
-  { title: "깊은 수면을 위한 저녁 습관", excerpt: "수면 전 2시간을 어떻게 보내느냐가 숙면의 핵심입니다. 빛, 카페인, 체온 조절로 수면의 질을 완벽하게 관리하세요.", category: "수면", image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop", keywords: ["수면과학", "생체리듬", "멜라토닌"], difficulty: "초급", duration: "10분" },
-  { title: "감정이 폭발하기 전에 쓰는 한 문장", excerpt: "감정이 커질수록 언어는 짧아져야 합니다. 갈등 상황에서 자신을 지키고 관계를 해치지 않는 문장 공식.", category: "감정관리", image: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop", keywords: ["감정조절", "정서표현", "갈등해결"], difficulty: "중급", duration: "10분" },
-  { title: "관계를 회복하는 대화 시작법", excerpt: "오해가 생겼을 때 문제를 풀어가는 첫 문장이 중요합니다. 공감을 이끄는 질문형 대화법으로 신뢰를 회복하세요.", category: "관계", image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop", keywords: ["애착이론", "공감적 소통", "신뢰 구축"], difficulty: "중급", duration: "10분" },
-  { title: "번아웃 신호 체크리스트", excerpt: "피곤함과 번아웃은 다릅니다. 신체적, 정서적, 행동적 신호를 파악하고 조기에 대처하세요.", category: "직장", image: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop", keywords: ["번아웃", "직무 스트레스", "정신건강"], difficulty: "초급", duration: "5분" },
-  { title: "자존감 회복을 위한 미세 습관", excerpt: "거창한 목표보다 작고 꾸준한 행동이 자기 신뢰를 만듭니다. 2분 규칙으로 작은 성공을 쌓아가세요.", category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", keywords: ["자기효능감", "습관형성", "성공 경험"], difficulty: "중급", duration: "15분" },
-  { title: "불안이 올라올 때 5분 안정 루틴", excerpt: "호흡 리셋과 감각 고정 훈련을 통한 즉각적 불안 감소. 신경계 진정 프로토콜로 공황발작에 대처하세요.", category: "불안관리", image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?q=80&w=800&auto=format&fit=crop", keywords: ["호흡법", "불안장애", "스트레스 완화"], difficulty: "초급", duration: "5분" },
-  { title: "신체 감각에 집중하기 - 5감 명상", excerpt: "오감 기반 마음챙김으로 현재 순간에 몰입하세요. 주의산만과 불안을 극복하는 감각 명상 프로토콜입니다.", category: "마음챙김", image: "https://images.unsplash.com/photo-1576091160550-112173f31c74?q=80&w=800&auto=format&fit=crop", keywords: ["마음챙김", "감각", "신경계"], difficulty: "초급", duration: "10분" },
-];
+// 카테고리별 메타데이터
+const CONTENT_METADATA: Record<number, { category: string; image: string; difficulty: Difficulty; duration: Duration }> = {
+  1: { category: "마음챙김", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
+  2: { category: "수면", image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
+  3: { category: "감정관리", image: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
+  4: { category: "관계", image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
+  5: { category: "직장", image: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "5분" },
+  6: { category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "15분" },
+};
 
-const POSTS: ContentPost[] = RAW_POSTS.map((post, index) => ({ ...post, id: `post-${index}` }));
+interface ContentApiResponse {
+  id: number;
+  title: string;
+  briefDescription: string;
+  description: string;
+  keywords: string[];
+  createdAt: string;
+}
 
-const EDITOR_PICKS = POSTS.slice(0, 5);
+// API 응답을 ContentPost로 변환
+function mapApiContentToPost(apiContent: ContentApiResponse): ContentPost {
+  const metadata = CONTENT_METADATA[apiContent.id] || {
+    category: "마음챙김",
+    image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
+    difficulty: "초급" as const,
+    duration: "10분" as const,
+  };
+
+  return {
+    id: String(apiContent.id),
+    title: apiContent.title,
+    excerpt: apiContent.briefDescription,
+    keywords: apiContent.keywords,
+    ...metadata,
+  };
+}
 
 const PRACTICES: PracticeItem[] = [
   { title: "3분 호흡", duration: "3분", description: "숨 길이를 맞추며 긴장을 천천히 낮춥니다.", completedCount: 12500, icon: "🌬️" },
@@ -62,13 +85,37 @@ const PRACTICES: PracticeItem[] = [
 ];
 
 export default function ContentsPage() {
+  const [posts, setPosts] = useState<ContentPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | "전체">("전체");
   const [selectedDuration, setSelectedDuration] = useState<Duration | "전체">("전체");
   const [sortBy, setSortBy] = useState<"latest" | "difficulty" | "duration">("latest");
 
+  useEffect(() => {
+    const fetchContents = async () => {
+      try {
+        setLoading(true);
+        const response = await apiClient.get<ContentApiResponse[]>("/contents");
+        const contentPosts = response.data.map(mapApiContentToPost);
+        setPosts(contentPosts);
+        setError(null);
+      } catch (err) {
+        setError("콘텐츠를 불러오는 데 실패했습니다.");
+        setPosts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContents();
+  }, []);
+
+  const editorPicks = posts.slice(0, 5);
+
   const filteredAndSortedPosts = useMemo(() => {
-    let filtered = POSTS;
+    let filtered = posts;
     if (selectedCategory !== "전체") filtered = filtered.filter((post) => post.category === selectedCategory);
     if (selectedDifficulty !== "전체") filtered = filtered.filter((post) => post.difficulty === selectedDifficulty);
     if (selectedDuration !== "전체") filtered = filtered.filter((post) => post.duration === selectedDuration);
@@ -82,7 +129,7 @@ export default function ContentsPage() {
       sorted.sort((a, b) => durationOrder[a.duration] - durationOrder[b.duration]);
     }
     return sorted;
-  }, [selectedCategory, selectedDifficulty, selectedDuration, sortBy]);
+  }, [posts, selectedCategory, selectedDifficulty, selectedDuration, sortBy]);
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] text-slate-900 font-sans selection:bg-brand-green/20">
@@ -99,8 +146,31 @@ export default function ContentsPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-10 lg:px-8 lg:py-16 space-y-16 lg:space-y-20">
         
+        {loading && (
+          <div className="text-center py-16">
+            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-brand-green mx-auto"></div>
+            <p className="text-slate-600">콘텐츠를 불러오는 중...</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="text-center py-16 bg-red-50 rounded-lg border border-red-200 p-6">
+            <h3 className="text-lg font-bold text-red-700">{error}</h3>
+            <p className="mt-2 text-sm text-red-600">잠시 후 다시 시도해주세요.</p>
+          </div>
+        )}
+
+        {!loading && !error && posts.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-slate-500">콘텐츠가 없습니다.</p>
+          </div>
+        )}
+        
+        {!loading && !error && posts.length > 0 && (
+          <>
+        
         {/* 1. 에디터 픽 */}
-        {EDITOR_PICKS.length > 0 && (
+        {editorPicks.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-6 lg:mb-8">
               <div>
@@ -111,11 +181,11 @@ export default function ContentsPage() {
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-7">
-                <ContentCard post={EDITOR_PICKS[0]} isFeatured />
+                <ContentCard post={editorPicks[0]} isFeatured />
               </div>
               <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
-                  {EDITOR_PICKS.slice(1, 5).map((post) => (
+                  {editorPicks.slice(1, 5).map((post) => (
                     <ContentCard key={post.id} post={post} />
                   ))}
                 </div>
@@ -225,6 +295,8 @@ export default function ContentsPage() {
             ))}
           </div>
         </section>
+        </>
+        )}
       </main>
 
       <style>{`

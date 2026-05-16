@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../utils/auth";
+import { apiClient } from "../utils/httpClient";
 
 // --- Types ---
 interface ContentPost {
@@ -13,6 +14,15 @@ interface ContentPost {
   duration: "5분" | "10분" | "15분" | "20분";
   content?: string;
   keywords?: string[];
+}
+
+interface ContentResponse {
+  id: number;
+  title: string;
+  briefDescription: string;
+  description: string;
+  keywords: string[];
+  createdAt: string;
 }
 
 interface Comment {
@@ -32,74 +42,34 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
   자존감: { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
 };
 
-const POSTS: ContentPost[] = [
-  {
-    id: "post-0",
-    title: "하루 10분 마음정리 루틴",
-    excerpt: "업무 시작 전 10분만 투자해도 집중력과 감정 안정에 큰 차이가 생깁니다.",
+// 카테고리별 색상 및 메타데이터 매핑
+const CONTENT_METADATA: Record<number, { category: string; image: string; difficulty: "초급" | "중급" | "고급"; duration: "5분" | "10분" | "15분" | "20분" }> = {
+  1: { category: "마음챙김", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
+  2: { category: "수면", image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
+  3: { category: "감정관리", image: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
+  4: { category: "관계", image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
+  5: { category: "직장", image: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "5분" },
+  6: { category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "15분" },
+};
+
+// API 응답을 ContentPost로 변환
+function mapApiResponseToPost(apiResponse: ContentResponse): ContentPost {
+  const metadata = CONTENT_METADATA[apiResponse.id] || {
     category: "마음챙김",
-    difficulty: "초급",
-    duration: "10분",
     image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
-    content: "업무 시작 전 10분만 투자해도 집중력과 감정 안정에 큰 차이가 생깁니다. 호흡, 감각, 생각 정리의 3단계를 짧게 실습해보세요.\n\n## 1단계: 호흡 안정 (3분)\n코로 천천히 숨을 들이쉬고 입으로 천천히 내쉽니다. 숨을 들이쉬는 동안 마음속으로 1, 2, 3을 세고, 내쉬는 동안 1, 2, 3, 4를 셉니다. 이 호흡은 신경계를 진정시키고 부교감신경을 활성화합니다.\n\n## 2단계: 감각 고정 (4분)\n현재 순간에 집중하기 위해 주변의 5가지를 관찰합니다. 보이는 것, 들리는 것, 냄새, 촉감, 맛 중 어떤 감각이든 괜찮습니다. 이 과정은 전두엽의 활성화를 돕고 집중력을 향상시킵니다.\n\n## 3단계: 생각 정리 (3분)\n오늘 해야 할 일 중 가장 중요한 것 3개를 적습니다. 우선순위를 정하면 집중력이 향상되고 스트레스가 감소합니다. 이는 신경가소성을 활용한 효과적인 뇌 훈련법입니다.",
-    keywords: ["마음챙김", "신경가소성", "전전두엽", "감정조절", "집중력"],
-  },
-  {
-    id: "post-1",
-    title: "깊은 수면을 위한 저녁 습관",
-    excerpt: "수면 전 2시간을 어떻게 보내느냐가 숙면의 핵심입니다.",
-    category: "수면",
-    difficulty: "초급",
-    duration: "10분",
-    image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop",
-    content: "수면 전 2시간을 어떻게 보내느냐가 숙면의 핵심입니다. 빛, 카페인, 체온을 조절하는 간단한 행동 가이드를 소개합니다.\n\n## 빛 관리\n수면 1시간 전부터 화면의 밝기를 줄이거나 블루라이트 필터를 활성화하세요. 자연 채광에 노출되면 수면 호르몬인 멜라토닌의 분비가 억제됩니다. 저녁 시간에는 어두운 환경 유지가 중요합니다.\n\n## 카페인 제한\n오후 3시 이후로는 카페인 섭취를 피하세요. 카페인의 반감기는 5시간으로, 저녁 8시 커피는 자정까지 영향을 미칩니다. 특히 예민한 사람은 더 일찍 끊어야 합니다.\n\n## 체온 조절\n따뜻한 음식이나 음료를 섭취하면 체온이 상승했다가 저녁에 급격히 내려가며 숙면을 유도합니다. 따뜻한 우유나 허브차가 도움이 됩니다.",
-    keywords: ["수면과학", "생체리듬", "수면 구조", "카페인 대사", "체온 조절"],
-  },
-  {
-    id: "post-2",
-    title: "감정이 폭발하기 전에 쓰는 한 문장",
-    excerpt: "감정이 커질수록 언어는 짧아져야 합니다.",
-    category: "감정관리",
-    difficulty: "중급",
-    duration: "10분",
-    image: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop",
-    content: "감정이 커질수록 언어는 짧아져야 합니다. 갈등 상황에서 스스로를 지키면서도 관계를 해치지 않는 문장 공식을 알려드립니다.\n\n## 상황 인정\n'지금 상황이 정말 답답하고 화난다'라고 먼저 인정하세요. 자신의 감정을 있는 그대로 인정하는 것이 가장 먼저 할 일입니다.\n\n## 감정 표현\n'나는 이 상황에서 불편함을 느끼고 있어'라고 표현하세요. 'I' 메시지를 사용하여 비난하지 않으면서 자신의 감정을 전달합니다.\n\n## 행동 제안\n'우리 함께 이 문제를 풀어볼까?'라고 제안하세요. 해결 방안을 함께 찾는 자세가 중요합니다.",
-    keywords: ["인지행동치료", "감정조절", "정서표현", "경계설정", "갈등해결"],
-  },
-  {
-    id: "post-3",
-    title: "관계를 회복하는 대화 시작법",
-    excerpt: "오해가 생겼을 때 문제를 풀어가는 첫 문장이 중요합니다.",
-    category: "관계",
-    difficulty: "중급",
-    duration: "10분",
-    image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop",
-    content: "오해가 생겼을 때 문제를 풀어가는 첫 문장이 중요합니다. 방어를 줄이고 공감을 이끄는 질문형 대화법을 정리했습니다.\n\n## 고민 표현하기\n'내가 뭔가 잘못했나봐, 너와 얘기하고 싶어'라고 시작하세요. 이 문장은 상대방의 방어심을 낮추고 대화의 문을 엽니다.\n\n## 상대방의 생각 듣기\n'너는 이 상황을 어떻게 생각해?'라고 물어보세요. 상대방의 관점을 이해하는 것이 관계 회복의 첫걸음입니다.\n\n## 함께 풀기\n'우리 함께 이 문제를 어떻게 풀 수 있을까?'라고 제안하세요. 함께라는 표현으로 팀 정신을 강화합니다.",
-    keywords: ["애착이론", "공감적 소통", "취약성", "신뢰 구축", "관계 회복"],
-  },
-  {
-    id: "post-4",
-    title: "번아웃 신호 체크리스트",
-    excerpt: "피곤함과 번아웃은 다릅니다.",
-    category: "직장",
-    difficulty: "초급",
-    duration: "5분",
-    image: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop",
-    content: "피곤함과 번아웃은 다릅니다. 최근 2주 기준으로 점검 가능한 체크리스트를 통해 현재 상태를 가볍게 진단해보세요.\n\n## 신체적 신호\n- [ ] 일어나기 힘들다\n- [ ] 피로가 풀리지 않는다\n- [ ] 소화가 잘 안 된다\n\n## 정서적 신호\n- [ ] 업무에 흥미가 없다\n- [ ] 쉽게 자극을 받는다\n- [ ] 무기력함을 느낀다\n\n## 행동적 신호\n- [ ] 업무 능률이 급격히 떨어졌다\n- [ ] 실수가 증가했다\n- [ ] 사람 만나기가 싫다",
-    keywords: ["번아웃", "직무 스트레스", "심리측정", "정신건강", "직장 건강"],
-  },
-  {
-    id: "post-5",
-    title: "자존감 회복을 위한 미세 습관",
-    excerpt: "거창한 목표보다 작고 꾸준한 행동이 자기 신뢰를 만듭니다.",
-    category: "자존감",
-    difficulty: "중급",
-    duration: "15분",
-    image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop",
-    content: "거창한 목표보다 작고 꾸준한 행동이 자기 신뢰를 만듭니다. 실패 확률을 낮추는 미세 습관 설계법을 담았습니다.\n\n## 원칙 1: 2분 규칙\n시작하기 힘든 일은 2분 버전으로 시작하세요. 예를 들어 '운동'이 아니라 '스트레칭 2분'부터. 작은 성공이 쌓여 자신감으로 변합니다.\n\n## 원칙 2: 연쇄 반응\n한 가지 작은 습관이 안정되면, 그 습관 다음에 새로운 습관을 붙이세요. 이를 습관 쌓기라고 부릅니다.\n\n## 원칙 3: 환경 설계\n습관이 자동으로 일어나도록 환경을 디자인하세요. 예를 들어 명상 쿠션을 항상 보이는 곳에 놓으세요.",
-    keywords: ["자기효능감", "습관형성", "보상계획", "성공 경험", "점진적 노출"],
-  },
-];
+    difficulty: "초급" as const,
+    duration: "10분" as const,
+  };
+
+  return {
+    id: String(apiResponse.id),
+    title: apiResponse.title,
+    excerpt: apiResponse.briefDescription,
+    content: apiResponse.description,
+    keywords: apiResponse.keywords,
+    ...metadata,
+  };
+}
 
 // 더미 댓글 데이터
 const DUMMY_COMMENTS: Record<string, Comment[]> = {
@@ -152,6 +122,9 @@ const DUMMY_COMMENTS: Record<string, Comment[]> = {
 export default function ContentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [post, setPost] = useState<ContentPost | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>(DUMMY_COMMENTS[id || ""] || []);
   const [commentText, setCommentText] = useState("");
   const [currentUserName, setCurrentUserName] = useState<string>("");
@@ -163,15 +136,50 @@ export default function ContentDetailPage() {
     }
   }, []);
 
-  const post = POSTS.find((p) => p.id === id);
+  useEffect(() => {
+    const fetchContent = async () => {
+      if (!id) {
+        setError("콘텐츠를 찾을 수 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await apiClient.get<ContentResponse>(`/contents/${id}`);
+        const contentPost = mapApiResponseToPost(response.data);
+        setPost(contentPost);
+        setError(null);
+      } catch (err) {
+        setError("콘텐츠를 불러오는 데 실패했습니다.");
+        setPost(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, [id]);
+
   const colors = post ? CATEGORY_COLORS[post.category] || CATEGORY_COLORS["마음챙김"] : CATEGORY_COLORS["마음챙김"];
 
-  if (!post) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-base flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-brand-green mx-auto"></div>
+          <p className="text-slate-600">콘텐츠를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !post) {
     return (
       <div className="min-h-screen bg-slate-50 text-base">
         <main className="mx-auto max-w-4xl px-4 py-12 lg:px-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-900">콘텐츠를 찾을 수 없습니다.</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{error || "콘텐츠를 찾을 수 없습니다."}</h1>
             <button
               onClick={() => navigate("/contents")}
               className="mt-4 font-semibold text-brand-green hover:opacity-80"
