@@ -6,7 +6,6 @@ import { authenticate, isLoggedIn, register, requestSignupVerificationCode, veri
 type AuthMode = "login" | "signup";
 
 export default function LoginPage() {
-  const useBackendAuth = import.meta.env.VITE_USE_BACKEND_AUTH === "true";
   const navigate = useNavigate();
   const location = useLocation();
   const redirectPath = (location.state as { from?: string } | null)?.from || "/";
@@ -60,7 +59,6 @@ export default function LoginPage() {
   };
 
   const signupStrength = calculatePasswordStrength(signupPassword);
-
 
   const getStrengthLabel = (strength: "weak" | "medium" | "strong") => {
     if (strength === "weak") return "약함";
@@ -133,7 +131,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (useBackendAuth && !isEmailVerified) {
+    if (!isEmailVerified) {
       setError("이메일 인증을 먼저 완료해주세요.");
       return;
     }
@@ -156,6 +154,7 @@ export default function LoginPage() {
     }
   };
 
+  // 인증 메일 발송
   const handleSendVerificationCode = async () => {
     setError("");
     setVerificationMessage("");
@@ -170,21 +169,21 @@ export default function LoginPage() {
       return;
     }
 
+    console.log("🚀 인증 코드 버튼 클릭:", signupEmail);
     setIsVerificationLoading(true);
     const result = await requestSignupVerificationCode(signupEmail);
     setIsVerificationLoading(false);
 
+    console.log("📊 인증 코드 결과:", result);
     if (result.success) {
       setIsVerificationSent(true);
-      setVerificationMessage(useBackendAuth ? "인증 코드를 이메일로 전송했습니다." : "데모 모드에서는 인증이 자동 통과됩니다.");
-      if (!useBackendAuth) {
-        setIsEmailVerified(true);
-      }
+      setVerificationMessage("인증 코드를 이메일로 전송했습니다.");
     } else {
       setError(result.message || "인증 메일 전송에 실패했습니다.");
     }
   };
 
+  // 인증 코드 확인
   const handleVerifyCode = async () => {
     setError("");
     setVerificationMessage("");
@@ -381,33 +380,32 @@ export default function LoginPage() {
                     </div>
                   </div>
 
-                  {useBackendAuth && (
-                    <div>
-                      <label className="mb-1.5 ml-1 block text-xs font-bold text-slate-600">인증 코드</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={verificationCode}
-                          onChange={(e) => setVerificationCode(e.target.value)}
-                          disabled={isLoading || isVerificationLoading}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-5 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-brand-green focus:bg-slate-50 disabled:opacity-50 shadow-sm"
-                          placeholder="6자리 코드를 입력하세요"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleVerifyCode}
-                          disabled={isLoading || isVerificationLoading || !isVerificationSent}
-                          className="shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          인증 확인
-                        </button>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
-                        <ShieldCheck size={13} />
-                        <span>{verificationMessage || "메일의 6자리 코드를 입력해 주세요."}</span>
-                      </div>
+                  {/* 이메일 인증 코드는 항상 렌더링되거나 인증 코드가 전송된 이후에만 노출되도록 처리 */}
+                  <div className={!isVerificationSent && !isEmailVerified ? "opacity-50 pointer-events-none" : ""}>
+                    <label className="mb-1.5 ml-1 block text-xs font-bold text-slate-600">인증 코드</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value)}
+                        disabled={isLoading || isVerificationLoading || isEmailVerified}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-5 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-brand-green focus:bg-slate-50 disabled:opacity-50 shadow-sm"
+                        placeholder="6자리 코드를 입력하세요"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyCode}
+                        disabled={isLoading || isVerificationLoading || !isVerificationSent || isEmailVerified}
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        인증 확인
+                      </button>
                     </div>
-                  )}
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                      <ShieldCheck size={13} />
+                      <span>{verificationMessage || "메일의 6자리 코드를 입력해 주세요."}</span>
+                    </div>
+                  </div>
                   
                   <div>
                     <label className="mb-1.5 ml-1 block text-xs font-bold text-slate-600">비밀번호</label>
@@ -491,7 +489,7 @@ export default function LoginPage() {
 
                   <button 
                     type="submit" 
-                    disabled={isLoading || !agreed || (useBackendAuth && !isEmailVerified)}
+                    disabled={isLoading || !agreed || !isEmailVerified}
                     className="mt-4 w-full rounded-pill bg-brand-green py-4 text-base font-bold text-white transition-colors hover:bg-brand-green-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 shadow-md"
                   >
                     {isLoading ? "가입 중..." : "회원가입"}

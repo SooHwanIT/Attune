@@ -60,18 +60,34 @@ export async function logoutApi(): Promise<void> {
 }
 
 export async function sendVerificationCodeApi(email: string): Promise<string> {
-  const response = await apiClient.post("/mail/send", { email });
-  return typeof response.data === "string" ? response.data : "인증 메일 발송 완료";
+  try {
+    console.log("📧 이메일 인증 코드 발송 요청:", email);
+    const response = await apiClient.post("/mail/send", { email });
+    console.log("✅ 인증 메일 발송 성공:", response.data);
+    return typeof response.data === "string" ? response.data : "인증 메일 발송 완료";
+  } catch (error) {
+    console.error("❌ 인증 메일 발송 실패:", error);
+    if (error instanceof Error) {
+      console.error("에러 메시지:", error.message);
+    }
+    throw error;
+  }
 }
 
 export async function verifyEmailCodeApi(email: string, code: string): Promise<{ verified: boolean; message: string }> {
   try {
+    console.log("🔐 이메일 인증 코드 검증 요청:", { email, code });
     const response = await apiClient.post("/mail/verify", { email, code });
+    console.log("✅ 이메일 인증 성공:", response.data);
     return {
       verified: true,
       message: typeof response.data === "string" ? response.data : "인증 성공",
     };
   } catch (error) {
+    console.error("❌ 이메일 인증 실패:", error);
+    if (error instanceof Error) {
+      console.error("에러 메시지:", error.message);
+    }
     return {
       verified: false,
       message: error instanceof Error ? error.message : "인증에 실패했습니다.",

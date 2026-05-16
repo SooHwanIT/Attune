@@ -11,14 +11,6 @@ import { setAuthTokenGetter, toApiError } from "./httpClient";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const USER_KEY = "user";
-const KNOWN_USERS_KEY = "knownUsers";
-const DEMO_USERS_KEY = "demoUsers";
-
-const ACCESS_TOKEN_EXPIRY = 1; // 1시간
-const REFRESH_TOKEN_EXPIRY = 7 * 24; // 7일
-
-const USE_BACKEND_AUTH = import.meta.env.VITE_USE_BACKEND_AUTH === "true";
-const ALLOW_DEMO_AUTH_FALLBACK = import.meta.env.VITE_ALLOW_DEMO_AUTH_FALLBACK !== "false";
 
 export interface User {
   id: string;
@@ -41,99 +33,7 @@ export type AuthResult = {
   message?: string;
 };
 
-type DemoUserRecord = User & { password: string };
-type KnownUserRecord = User & { password?: string };
-
-const DEMO_USERS: DemoUserRecord[] = [
-  { id: "1", email: "demo@attune.com", password: "demo1234", name: "SuHwan", avatar: "🧑‍💻" },
-  { id: "2", email: "test@attune.com", password: "test1234", name: "SuHwan", avatar: "👤" },
-];
-
-function base64UrlEncode(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function createDemoToken(user: Pick<User, "id" | "email" | "name" | "avatar">, expiresInHours: number): string {
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const payload = {
-    sub: user.id,
-    email: user.email,
-    name: user.name,
-    avatar: user.avatar,
-    iat: issuedAt,
-    exp: issuedAt + expiresInHours * 3600,
-  };
-
-  return `${base64UrlEncode(JSON.stringify({ alg: "none", typ: "JWT" }))}.${base64UrlEncode(JSON.stringify(payload))}.`;
-}
-
-function safeParseDemoUsers(value: string | null): DemoUserRecord[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function getStoredDemoUsers(): DemoUserRecord[] {
-  return safeParseDemoUsers(localStorage.getItem(DEMO_USERS_KEY));
-}
-
-function safeParseKnownUsers(value: string | null): KnownUserRecord[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function getKnownUsers(): KnownUserRecord[] {
-  return safeParseKnownUsers(localStorage.getItem(KNOWN_USERS_KEY));
-}
-
-function saveKnownUsers(users: KnownUserRecord[]): void {
-  localStorage.setItem(KNOWN_USERS_KEY, JSON.stringify(users));
-}
-
-function saveStoredDemoUsers(users: DemoUserRecord[]): void {
-  localStorage.setItem(DEMO_USERS_KEY, JSON.stringify(users));
-}
-
-function getAllDemoUsers(): DemoUserRecord[] {
-  return [...DEMO_USERS, ...getStoredDemoUsers()];
-}
-
-function buildFallbackName(email: string): string {
-  const localPart = email.split("@")[0]?.trim();
-  return localPart || email;
-}
-
-function saveKnownUserProfile(user: KnownUserRecord): void {
-  const users = getKnownUsers();
-  const filtered = users.filter((item) => item.email.toLowerCase() !== user.email.toLowerCase());
-  saveKnownUsers([...filtered, user]);
-}
-
-function loadKnownUserProfile(email: string): KnownUserRecord | null {
-  const normalizedEmail = email.toLowerCase();
-  const userFromKnown = getKnownUsers().find((item) => item.email.toLowerCase() === normalizedEmail);
-  if (userFromKnown) return userFromKnown;
-
-  const userFromDemo = getAllDemoUsers().find((item) => item.email.toLowerCase() === normalizedEmail);
-  return userFromDemo ?? null;
-}
-
+// JWT 페이로드 디코딩 함수
 function decodeJwtPayload(token: string): { exp?: number; sub?: string } | null {
   const parts = token.split(".");
   if (parts.length < 2) return null;
@@ -146,98 +46,40 @@ function decodeJwtPayload(token: string): { exp?: number; sub?: string } | null 
   }
 }
 
+// 토큰 만료 여부 확인
 function isTokenValid(token: string): boolean {
   const payload = decodeJwtPayload(token);
   if (!payload?.exp) {
     return false;
   }
-
   return payload.exp * 1000 > Date.now();
 }
 
-function setSession(user: User, accessToken: string, refreshToken?: string, accessHours = ACCESS_TOKEN_EXPIRY, refreshHours = REFRESH_TOKEN_EXPIRY): void {
-  const accessTokenExpiry = Date.now() + accessHours * 3600 * 1000;
-
+// 세션 저장
+function setSession(user: User, accessToken: string): void {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
-  localStorage.setItem(`${accessToken}_expiry`, accessTokenExpiry.toString());
-  saveKnownUserProfile(user);
-
-  if (!USE_BACKEND_AUTH && refreshToken) {
-    const refreshTokenExpiry = Date.now() + refreshHours * 3600 * 1000;
-    localStorage.setItem("refreshToken", refreshToken);
-    localStorage.setItem(`${refreshToken}_expiry`, refreshTokenExpiry.toString());
-  }
 }
 
+// API 응답으로부터 세션 저장
 function saveSessionFromApi(payload: AuthSessionResponse, email: string, fallbackName?: string): void {
-  const knownUser = loadKnownUserProfile(email);
+  const decoded = decodeJwtPayload(payload.accessToken);
   const user: User = {
-    id: knownUser?.id ?? decodeJwtPayload(payload.accessToken)?.sub ?? email,
+    id: decoded?.sub ?? email,
     email,
-    name: knownUser?.name ?? fallbackName ?? buildFallbackName(email),
-    avatar: knownUser?.avatar,
+    name: fallbackName ?? email.split("@")[0] ?? email,
   };
 
   setSession(user, payload.accessToken);
 }
 
+// 세션 삭제
 function removeSessionStorage(): void {
-  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-
-  if (accessToken) {
-    // refresh cookies are handled by the backend; keep this branch for demo mode compatibility.
-    localStorage.removeItem(`${accessToken}_expiry`);
-  }
 }
 
-function loginLocal(email: string, password: string): AuthResult {
-  const user = getAllDemoUsers().find((item) => item.email === email && item.password === password);
-  if (!user) {
-    return { success: false, message: "이메일 또는 비밀번호가 올바르지 않습니다." };
-  }
-
-  const sessionUser = { id: user.id, email: user.email, name: user.name, avatar: user.avatar };
-  setSession(
-    sessionUser,
-    createDemoToken(sessionUser, ACCESS_TOKEN_EXPIRY),
-    createDemoToken(sessionUser, REFRESH_TOKEN_EXPIRY),
-    ACCESS_TOKEN_EXPIRY,
-    REFRESH_TOKEN_EXPIRY
-  );
-  return { success: true };
-}
-
-function signupLocal(name: string, email: string, password: string): AuthResult {
-  const exists = getAllDemoUsers().some((item) => item.email.toLowerCase() === email.toLowerCase());
-  if (exists) {
-    return { success: false, message: "이미 가입된 이메일입니다." };
-  }
-
-  const storedUsers = getStoredDemoUsers();
-  const newUser: DemoUserRecord = {
-    id: `local-${Date.now()}`,
-    email,
-    password,
-    name,
-  };
-  saveStoredDemoUsers([...storedUsers, newUser]);
-
-  const sessionUser = { id: newUser.id, email: newUser.email, name: newUser.name };
-
-  setSession(
-    sessionUser,
-    createDemoToken(sessionUser, ACCESS_TOKEN_EXPIRY),
-    createDemoToken(sessionUser, REFRESH_TOKEN_EXPIRY),
-    ACCESS_TOKEN_EXPIRY,
-    REFRESH_TOKEN_EXPIRY
-  );
-
-  return { success: true };
-}
-
+// 현재 저장된 Access Token 가져오기
 export const getAccessToken = (): string | null => {
   const token = localStorage.getItem(ACCESS_TOKEN_KEY);
   if (!token) return null;
@@ -245,18 +87,10 @@ export const getAccessToken = (): string | null => {
   if (isTokenValid(token)) {
     return token;
   }
-
-  const result = refreshAccessToken();
-  if (result.success) {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
-  }
-
+  
+  // 토큰이 만료된 경우 API 인터셉터에서 refreshAccessTokenAsync를 호출하도록 유도하기 위해 null 반환
   return null;
 };
-
-export const getRefreshToken = (): string | null => null;
-
-export const isLoggedIn = (): boolean => !!getAccessToken() && !!getCurrentUser();
 
 export const getCurrentUser = (): User | null => {
   const userStr = localStorage.getItem(USER_KEY);
@@ -268,128 +102,90 @@ export const getCurrentUser = (): User | null => {
   }
 };
 
-// 호환성을 위해 유지: 기존 동기 로그인은 로컬 더미 인증만 수행
-export const login = (email: string, password: string): AuthResult => loginLocal(email, password);
+export const isLoggedIn = (): boolean => !!getAccessToken() && !!getCurrentUser();
 
+// 로그인
 export const authenticate = async (email: string, password: string): Promise<AuthResult> => {
-  if (USE_BACKEND_AUTH) {
-    try {
-      const payload = await loginApi(email, password);
-      saveSessionFromApi(payload, email);
-      return { success: true };
-    } catch (error) {
-      if (!ALLOW_DEMO_AUTH_FALLBACK) {
-        return { success: false, message: toApiError(error).message };
-      }
-    }
+  try {
+    const payload = await loginApi(email, password);
+    saveSessionFromApi(payload, email);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: toApiError(error).message };
   }
-
-  return loginLocal(email, password);
 };
 
+// 회원가입
 export const register = async (name: string, email: string, password: string): Promise<AuthResult> => {
-  if (USE_BACKEND_AUTH) {
-    try {
-      await signupApi(name, email, password);
-      const payload = await loginApi(email, password);
-      saveSessionFromApi(payload, email, name);
-      return { success: true };
-    } catch (error) {
-      if (!ALLOW_DEMO_AUTH_FALLBACK) {
-        return { success: false, message: toApiError(error).message };
-      }
-    }
+  try {
+    await signupApi(name, email, password);
+    const payload = await loginApi(email, password);
+    saveSessionFromApi(payload, email, name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: toApiError(error).message };
   }
-
-  return signupLocal(name, email, password);
 };
 
-export const refreshAccessToken = (): AuthResult => {
-  if (USE_BACKEND_AUTH) {
-    // 동기 API는 사용할 수 없으므로, 백엔드 모드에서는 재로그인을 유도합니다.
-    return { success: false, message: "세션이 만료되어 다시 로그인이 필요합니다." };
-  }
-
-  const refreshToken = localStorage.getItem("refreshToken");
-
-  if (!refreshToken || !isTokenValid(refreshToken)) {
-    return { success: false, message: "로그인이 만료되었습니다." };
-  }
-
-  const currentUser = getCurrentUser();
-  if (!currentUser) {
-    return { success: false, message: "로그인이 만료되었습니다." };
-  }
-
-  const newAccessToken = createDemoToken(currentUser, ACCESS_TOKEN_EXPIRY);
-  const accessTokenExpiry = Date.now() + ACCESS_TOKEN_EXPIRY * 3600 * 1000;
-
-  localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
-  localStorage.setItem(`${newAccessToken}_expiry`, accessTokenExpiry.toString());
-
-  return { success: true };
-};
-
+// Access Token 비동기 갱신 (쿠키의 Refresh Token을 이용해 백엔드에서 갱신된 Access Token을 받아옴)
 export const refreshAccessTokenAsync = async (): Promise<AuthResult> => {
-  if (!USE_BACKEND_AUTH) {
-    return refreshAccessToken();
-  }
-
   try {
-    const accessToken = await refreshTokenApi();
+    const payload = await refreshTokenApi(); // 백엔드에서 쿠키를 읽어 새 토큰을 응답
     const currentUser = getCurrentUser();
+    
     if (!currentUser) {
-      return { success: false, message: "사용자 정보를 찾을 수 없습니다." };
+      return { success: false, message: "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요." };
     }
-    saveSessionFromApi(accessToken, currentUser.email, currentUser.name);
+    
+    saveSessionFromApi(payload, currentUser.email, currentUser.name);
     return { success: true };
   } catch (error) {
+    removeSessionStorage(); // 갱신 실패 시 세션 초기화
     return { success: false, message: toApiError(error).message };
   }
 };
 
+// 로그아웃
 export const logout = async (): Promise<void> => {
-  if (USE_BACKEND_AUTH) {
-    try {
-      await logoutApi();
-    } catch {
-      // 토큰이 만료된 상태라도 로컬 세션은 반드시 정리합니다.
-    }
-  }
-
-  removeSessionStorage();
-};
-
-export const setLoggedIn = (value: boolean): void => {
-  if (value) {
-    loginLocal("demo@attune.com", "demo1234");
-  } else {
-    void logout();
-  }
-};
-
-export const requestSignupVerificationCode = async (email: string): Promise<AuthResult> => {
-  if (!USE_BACKEND_AUTH) {
-    return { success: true };
-  }
-
   try {
+    await logoutApi();
+  } catch {
+    // 토큰이 이미 만료되어 백엔드 로그아웃이 실패하더라도 로컬 세션은 반드시 지웁니다.
+  } finally {
+    removeSessionStorage();
+  }
+};
+
+// 이메일 인증 코드 요청
+export const requestSignupVerificationCode = async (email: string): Promise<AuthResult> => {
+  try {
+    console.log("📨 회원가입 인증 코드 요청 시작:", email);
+    console.log("🔗 API Endpoint:", `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/mail/send`);
     await sendVerificationCodeApi(email);
+    console.log("✅ 인증 코드 요청 성공");
     return { success: true };
   } catch (error) {
-    return { success: false, message: toApiError(error).message };
+    console.error("❌ 인증 코드 요청 실패:", error);
+    const apiError = toApiError(error);
+    console.error("상세 에러:", apiError);
+    return { success: false, message: apiError.message };
   }
 };
 
+// 이메일 인증 코드 확인
 export const verifySignupCode = async (email: string, code: string): Promise<AuthResult> => {
-  if (!USE_BACKEND_AUTH) {
-    return { success: true };
+  try {
+    console.log("✔️ 회원가입 인증 코드 검증 시작:", { email, code });
+    const result = await verifyEmailCodeApi(email, code);
+    console.log("검증 결과:", result);
+    return result.verified ? { success: true } : { success: false, message: result.message };
+  } catch (error) {
+    console.error("❌ 인증 코드 검증 실패:", error);
+    const apiError = toApiError(error);
+    console.error("상세 에러:", apiError);
+    return { success: false, message: apiError.message };
   }
-
-  const result = await verifyEmailCodeApi(email, code);
-  return result.verified ? { success: true } : { success: false, message: result.message };
 };
 
+// HTTP 클라이언트용 토큰 Getter 설정
 setAuthTokenGetter(getAccessToken);
-
-

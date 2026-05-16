@@ -16,7 +16,7 @@ export function setAuthTokenGetter(getter: TokenGetter): void {
 }
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
   timeout: Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000),
   withCredentials: true,
   headers: {
