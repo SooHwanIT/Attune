@@ -39,7 +39,7 @@ app.post("/api/auth/login", (req, res) => {
   return res.json(issueTokens(user));
 });
 
-app.post("/api/auth/signup", (req, res) => {
+app.post("/api/users/signup", (req, res) => {
   const { name, email, password } = req.body || {};
   if (!name || !email || !password) {
     return res.status(400).json({ code: "INVALID_REQUEST", message: "name, email, password가 필요합니다." });
@@ -61,7 +61,7 @@ app.post("/api/auth/signup", (req, res) => {
   return res.status(201).json(issueTokens(user));
 });
 
-app.post("/api/auth/refresh", (req, res) => {
+app.post("/api/auth/reissue", (req, res) => {
   const { refreshToken } = req.body || {};
   if (!refreshToken) {
     return res.status(400).json({ code: "INVALID_REQUEST", message: "refreshToken이 필요합니다." });
@@ -71,7 +71,15 @@ app.post("/api/auth/refresh", (req, res) => {
   return res.json(issueTokens(fallbackUser));
 });
 
-app.post("/api/counsel/initiate", (req, res) => {
+app.post("/api/counseling/sessions", (_req, res) => {
+  setTimeout(() => {
+    res.status(201).json({
+      ticketId: `mock-ticket-${Date.now()}`,
+    });
+  }, 400);
+});
+
+app.post("/api/counseling/sessions/legacy", (req, res) => {
   const { topic, mood, style, content } = req.body || {};
   console.log("[Mock Server] initiateCounsel received:", { topic, mood, style, content });
 
