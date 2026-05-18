@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ArrowUpDown, Funnel, Loader2, MessageSquare, Search } from "lucide-react";
-import { listCounselingSessionsApi, type CounselingSessionSummary } from "../utils/counselingApi";
+import { ArrowRight, ArrowUpDown, Funnel, Loader2, MessageSquare, Search, Trash2 } from "lucide-react";
+import {
+  deleteCounselingSessionApi,
+  listCounselingSessionsApi,
+  type CounselingSessionSummary,
+} from "../utils/counselingApi";
 import { toApiError } from "../utils/httpClient";
 
 type DemoCounselData = {
@@ -96,6 +100,7 @@ export default function AnalysisHubPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -105,7 +110,7 @@ export default function AnalysisHubPage() {
       setError("");
 
       try {
-        const response = await listCounselingSessionsApi(0, 50);
+        const response = await listCounselingSessionsApi(0, 50, sortBy === "latest" ? "DESC" : "ASC");
         if (active) {
           if (response.content.length > 0) {
             setSessions(response.content);
@@ -131,7 +136,32 @@ export default function AnalysisHubPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [sortBy]);
+
+  const handleDeleteSession = async (event: MouseEvent<HTMLButtonElement>, session: SessionListItem) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const confirmed = window.confirm("이 상담 기록을 삭제할까요?");
+    if (!confirmed) return;
+
+    if (session.reportState) {
+      setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId));
+      return;
+    }
+
+    setDeletingSessionId(session.sessionId);
+    setError("");
+
+    try {
+      await deleteCounselingSessionApi(session.sessionId);
+      setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId));
+    } catch (deleteError) {
+      setError(toApiError(deleteError).message);
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
 
   const uniqueTypes = useMemo(() => Array.from(new Set(sessions.map((session) => session.counselingType))), [sessions]);
 
@@ -270,6 +300,20 @@ export default function AnalysisHubPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-slate-500 lg:shrink-0">
+                        <button
+                          type="button"
+                          onClick={(event) => handleDeleteSession(event, session)}
+                          disabled={deletingSessionId === session.sessionId}
+                          className="inline-flex items-center gap-1 rounded-md border border-rose-100 px-2 py-1 font-semibold text-rose-500 transition hover:bg-rose-50 disabled:opacity-50"
+                          aria-label="상담 기록 삭제"
+                        >
+                          {deletingSessionId === session.sessionId ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                          삭제
+                        </button>
                         <span className="inline-flex items-center gap-1">
                           <MessageSquare size={14} />
                           상세 보기

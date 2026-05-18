@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../utils/auth";
-import { apiClient } from "../utils/httpClient";
+import { getContentDetailApi, type ContentResponse } from "../utils/contentApi";
 
 // --- Types ---
 interface ContentPost {
@@ -14,15 +14,6 @@ interface ContentPost {
   duration: "5분" | "10분" | "15분" | "20분";
   content?: string;
   keywords?: string[];
-}
-
-interface ContentResponse {
-  id: number;
-  title: string;
-  briefDescription: string;
-  description: string;
-  keywords: string[];
-  createdAt: string;
 }
 
 interface Comment {
@@ -146,11 +137,11 @@ export default function ContentDetailPage() {
 
       try {
         setLoading(true);
-        const response = await apiClient.get<ContentResponse>(`/contents/${id}`);
-        const contentPost = mapApiResponseToPost(response.data);
+        const response = await getContentDetailApi(id);
+        const contentPost = mapApiResponseToPost(response);
         setPost(contentPost);
         setError(null);
-      } catch (err) {
+      } catch {
         setError("콘텐츠를 불러오는 데 실패했습니다.");
         setPost(null);
       } finally {

@@ -191,7 +191,9 @@ export default function ReportPage() {
 
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-xs font-bold text-slate-400">AI 피드백</p>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">{backendReport.feedback}</p>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    {backendReport.actionItems || backendReport.strengths || backendReport.summary}
+                  </p>
                 </div>
               </section>
             )}

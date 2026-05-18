@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { apiClient } from "../utils/httpClient";
+import { listContentsApi, type ContentResponse } from "../utils/contentApi";
 
 // --- Types ---
 type Difficulty = "초급" | "중급" | "고급";
 type Duration = "5분" | "10분" | "15분" | "20분";
+type ContentSort = "latest" | "difficulty" | "duration";
 
 interface ContentPost {
   id: string;
@@ -50,17 +51,8 @@ const CONTENT_METADATA: Record<number, { category: string; image: string; diffic
   6: { category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "15분" },
 };
 
-interface ContentApiResponse {
-  id: number;
-  title: string;
-  briefDescription: string;
-  description: string;
-  keywords: string[];
-  createdAt: string;
-}
-
 // API 응답을 ContentPost로 변환
-function mapApiContentToPost(apiContent: ContentApiResponse): ContentPost {
+function mapApiContentToPost(apiContent: ContentResponse): ContentPost {
   const metadata = CONTENT_METADATA[apiContent.id] || {
     category: "마음챙김",
     image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
@@ -91,17 +83,17 @@ export default function ContentsPage() {
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | "전체">("전체");
   const [selectedDuration, setSelectedDuration] = useState<Duration | "전체">("전체");
-  const [sortBy, setSortBy] = useState<"latest" | "difficulty" | "duration">("latest");
+  const [sortBy, setSortBy] = useState<ContentSort>("latest");
 
   useEffect(() => {
     const fetchContents = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get<ContentApiResponse[]>("/contents");
-        const contentPosts = response.data.map(mapApiContentToPost);
+        const response = await listContentsApi();
+        const contentPosts = response.map(mapApiContentToPost);
         setPosts(contentPosts);
         setError(null);
-      } catch (err) {
+      } catch {
         setError("콘텐츠를 불러오는 데 실패했습니다.");
         setPosts([]);
       } finally {
@@ -249,7 +241,7 @@ export default function ContentsPage() {
                  <select 
                     className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
                     value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value as any)}
+                    onChange={(e) => setSortBy(e.target.value as ContentSort)}
                   >
                     <option value="latest">최신순</option>
                     <option value="difficulty">난이도순</option>

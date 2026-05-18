@@ -19,7 +19,7 @@ type DemoTurn = {
   user: string;
   assistant: string;
   emotion: string;
-  animation: "idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired";
+  animation: "idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired" | "standMotion";
   stage: {
     content: string;
     summary: string;
@@ -337,7 +337,7 @@ export default function CounselTestPage() {
 
   const [loading, setLoading] = useState(false);
   const [emotion, setEmotion] = useState("neutral");
-  const [currentAnimation, setCurrentAnimation] = useState<"idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired">("idle");
+  const [currentAnimation, setCurrentAnimation] = useState<"standMotion" | "idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired">("standMotion");
   const [chatLog, setChatLog] = useState<ChatMessage[]>([
     {
       role: "system",

@@ -10,6 +10,8 @@ const ThreeCounselScene = lazy(() => import("../../components/ThreeCounselScene"
 const TEST_LOG_PREFIX = "[CounselTest]";
 const MEDIA_SEND_INTERVAL_MS = 2000;
 const INPUT_AUDIO_GAIN = 2.6;
+const COUNSEL_AVATAR_URL = "/tomcat.vrm";
+const COUNSEL_AVATAR_POSITION: [number, number, number] = [0, -0.45, 0.75];
 
 interface Stage {
   id: number;
@@ -48,8 +50,8 @@ export default function CounselPage() {
   const [loading, setLoading] = useState(false);
   const [emotion, setEmotion] = useState("neutral");
   const [currentAnimation, setCurrentAnimation] = useState<
-    "idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired"
-  >("idle");
+    "standMotion" | "idle" | "greeting" | "vSignCute" | "bangEmphasis" | "spinShowoff" | "modelConfident" | "squatTired"
+  >("standMotion");
   const [chatLog, setChatLog] = useState<ChatMessage[]>([
     {
       role: "system",
@@ -770,7 +772,12 @@ export default function CounselPage() {
             <div className="absolute inset-0">
               {shouldMountThreeScene && !shouldHideVrmModel ? (
                 <Suspense fallback={<div className="h-full w-full bg-slate-100" />}>
-                  <ThreeCounselScene emotion={emotion} currentAnimation={currentAnimation} />
+                  <ThreeCounselScene
+                    emotion={emotion}
+                    currentAnimation={currentAnimation}
+                    avatarUrl={COUNSEL_AVATAR_URL}
+                    avatarPosition={COUNSEL_AVATAR_POSITION}
+                  />
                 </Suspense>
               ) : (
                 <div className="h-full w-full bg-slate-100" />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ArrowRight, BookOpen, ChevronDown, MessageSquare, Zap, Heart } from "lucide-react";
 import EmotionSnapshot from "../components/analysis/EmotionSnapshot";
@@ -12,6 +12,8 @@ import {
 } from "../utils/analysisUtils";
 import { getSessionRecordById } from "../utils/sessionStore";
 import { getRecommendedContentsByTopics } from "../utils/recommendedContents";
+import { getCounselingReportDetailApi, type CounselingReportDetail } from "../utils/counselingApi";
+import { toApiError } from "../utils/httpClient";
 
 type CounselData = {
   chatLog: { role: string; text: string }[];
@@ -47,6 +49,11 @@ const CBT_STAGES = [
   },
 ];
 
+type DisplayStage = (typeof CBT_STAGES)[number] & {
+  detailContent?: string;
+  emotionFlow?: string[];
+};
+
 const DUMMY_COUNSEL_DATA: CounselData = {
   // ... 기존 chatLog 유지 ...
   chatLog: [
@@ -81,11 +88,15 @@ const DUMMY_COUNSEL_DATA: CounselData = {
 };
 
 // 5단계 아코디언 컴포넌트
-const CounselStageAccordion = ({ stages }: { stages: typeof CBT_STAGES }) => {
+const CounselStageAccordion = ({ stages }: { stages: DisplayStage[] }) => {
   const [expandedStep, setExpandedStep] = useState<number | null>(1); // 초기값 1로 설정하여 첫 스텝 열어두기
 
   // 여러 감정의 흐름을 배열로 반환
-  const getEmotionFlowForStep = (step: number): string[] => {
+  const getEmotionFlowForStage = (stage: DisplayStage): string[] => {
+    if (stage.emotionFlow && stage.emotionFlow.length > 0) {
+      return stage.emotionFlow;
+    }
+
     const emotionFlows: { [key: number]: string[] } = {
       1: ["불안", "경계", "위축", "안도"],
       2: ["안도", "긴장", "수치심", "우울", "답답함"],
@@ -93,11 +104,15 @@ const CounselStageAccordion = ({ stages }: { stages: typeof CBT_STAGES }) => {
       4: ["희망", "의심", "수용", "의지"],
       5: ["의지", "평온", "자신감", "행복"],
     };
-    return emotionFlows[step] || ["중립"];
+    return emotionFlows[stage.step] || ["중립"];
   };
 
   // 매우 구체적인 상담 내용 더미 데이터
-  const getStepContent = (step: number): string => {
+  const getStepContent = (stage: DisplayStage): string => {
+    if (stage.detailContent) {
+      return stage.detailContent;
+    }
+
     const contents: { [key: number]: string } = {
       1: "내담자는 최근 큰 프로젝트를 맡으며 극심한 압박감을 호소함. 수면 장애와 함께 출근 전 심장이 두근거리는 신체화 증상을 겪고 있음. 상담사는 내담자의 고통에 깊이 공감하며, 이러한 반응이 과도한 스트레스 상황에서 나타날 수 있는 자연스러운 방어 기제임을 설명하여 정서적 환기와 안도감을 제공함.",
       2: "가장 불안이 극대화되는 '주간 보고 회의' 상황을 구체적으로 탐색함. 내담자는 '팀원들이 내 발표를 비웃을 것 같다', '한 번 실수하면 내 평가는 바닥으로 떨어질 것이다'라는 파국화(Catastrophizing)와 독심술(Mind-reading)의 인지적 오류를 보임. 불안의 근원이 완벽주의에 있음을 식별함.",
@@ -105,14 +120,14 @@ const CounselStageAccordion = ({ stages }: { stages: typeof CBT_STAGES }) => {
       4: "주간 보고 회의 전날 밤 적용할 수 있는 구체적인 행동 루틴을 수립함. 1) 4-7-8 심호흡 3회 실시, 2) 예상 질문 3가지와 답변 키워드만 메모장에 작성하기, 3) '완벽하지 않아도 괜찮다'는 자기 자비(Self-compassion) 문장 낭독하기를 구체적인 실천 계획으로 정함.",
       5: "오늘 세션에서 다룬 핵심 통찰(불안은 준비 부족이 아닌 완벽주의에서 비롯됨)을 다시 한번 요약함. 내담자가 스스로 도출해낸 행동 계획을 실천할 수 있도록 강하게 격려하며, 다음 세션 전까지 매일 감정 일기를 작성하는 과제를 부여하고 세션을 긍정적으로 마무리함.",
     };
-    return contents[step] || "";
+    return contents[stage.step] || "";
   };
 
   return (
     <div className="space-y-3">
       {stages.map((stage) => {
         const isExpanded = expandedStep === stage.step;
-        const emotions = getEmotionFlowForStep(stage.step);
+        const emotions = getEmotionFlowForStage(stage);
 
         return (
           // 컴포넌트 전체를 감싸는 래퍼: 확장 시 전체 테두리와 배경색이 변경됨
@@ -163,7 +178,7 @@ const CounselStageAccordion = ({ stages }: { stages: typeof CBT_STAGES }) => {
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-brand-green mb-2">상담 내용</p>
                     <p className="text-[13px] leading-relaxed text-slate-600">
-                      {getStepContent(stage.step)}
+                      {getStepContent(stage)}
                     </p>
                   </div>
 
@@ -199,6 +214,50 @@ export default function SessionAnalysisPage() {
   const counselData = location.state?.counselData as CounselData | undefined;
   const persistedSession = sessionId ? getSessionRecordById(sessionId) : null;
   const activeCounselData = persistedSession ?? counselData ?? DUMMY_COUNSEL_DATA;
+  const backendSessionId = useMemo(() => {
+    const parsed = Number(sessionId);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [sessionId]);
+  const [backendReport, setBackendReport] = useState<CounselingReportDetail | null>(null);
+  const [isBackendLoading, setIsBackendLoading] = useState(false);
+  const [backendError, setBackendError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBackendReport = async () => {
+      if (!backendSessionId) {
+        setBackendReport(null);
+        setBackendError("");
+        return;
+      }
+
+      setIsBackendLoading(true);
+      setBackendError("");
+
+      try {
+        const response = await getCounselingReportDetailApi(backendSessionId);
+        if (active) {
+          setBackendReport(response);
+        }
+      } catch (loadError) {
+        if (active) {
+          setBackendReport(null);
+          setBackendError(toApiError(loadError).message);
+        }
+      } finally {
+        if (active) {
+          setIsBackendLoading(false);
+        }
+      }
+    };
+
+    void loadBackendReport();
+
+    return () => {
+      active = false;
+    };
+  }, [backendSessionId]);
 
   const analysisData = useMemo(() => {
     if (!activeCounselData || activeCounselData.chatLog.length === 0) {
@@ -257,37 +316,92 @@ export default function SessionAnalysisPage() {
 
   const initialEmotion = analysisData.emotionScores[0] ?? 50;
   const finalEmotion = analysisData.emotionScores[analysisData.emotionScores.length - 1] ?? 50;
+  const backendDisplayStages = useMemo<DisplayStage[]>(() => {
+    if (!backendReport?.stageDetails?.length) {
+      return CBT_STAGES;
+    }
+
+    return backendReport.stageDetails.map((stage, index) => {
+      const fallback = CBT_STAGES[index] ?? {
+        step: stage.step,
+        title: `${stage.step}단계`,
+        subtitle: "상담 단계",
+      };
+
+      return {
+        ...fallback,
+        step: stage.step,
+        detailContent: stage.content,
+        emotionFlow: stage.emotionFlow,
+      };
+    });
+  }, [backendReport]);
+
+  const insightSummary = backendReport
+    ? {
+        emotion: {
+          before: backendReport.initialEmotion || "-",
+          after: backendReport.finalEmotion || backendReport.primaryEmotion || "-",
+        },
+        story: backendReport.summary || backendReport.topic,
+        insight: backendReport.strengths || "상담 리포트의 강점 분석이 아직 없습니다.",
+        action: backendReport.actionItems || "상담 리포트의 실행 항목이 아직 없습니다.",
+      }
+    : {
+        emotion: { before: "불안함", after: "자신감" },
+        story: "업무 회의에서의 불안감과 자기 의심",
+        insight: "오늘 상담을 통해 당신의 불안감이 단순한 준비 부족이 아니라, 완벽함을 추구하는 당신의 강점이라는 걸 발견했어요. 객관적 준비 상황 파악 및 체크리스트 작성",
+        action: "회의 전 준비 사항을 체크리스트로 확인하는 루틴 유지하기",
+      };
+
+  const startedAt = backendReport?.startedAt ? new Date(backendReport.startedAt) : null;
+  const endedAt = backendReport?.endedAt ? new Date(backendReport.endedAt) : null;
+  const backendDurationMinutes =
+    startedAt && endedAt ? Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)) : null;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8 text-base">
       <main>
         <div className="mx-auto max-w-7xl px-4 py-3 lg:px-8 lg:py-4">
+          {isBackendLoading && (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+              백엔드 상담 리포트를 불러오는 중입니다.
+            </div>
+          )}
+
+          {!isBackendLoading && backendError && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+              백엔드 리포트를 불러오지 못해 로컬 분석 화면을 표시합니다. {backendError}
+            </div>
+          )}
           {/* 상단 세션 요약 헤더 - Full Width */}
           <section className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-900">
               <MessageSquare size={20} className="text-brand-green" />
-              {sessionDateTitle}
+              {backendReport ? `${new Date(backendReport.startedAt).toLocaleDateString("ko-KR")} ${backendReport.topic}` : sessionDateTitle}
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               {/* 상담 소요 시간 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">소요 시간</p>
-                <p className="text-2xl font-bold text-slate-900">45</p>
+                <p className="text-2xl font-bold text-slate-900">{backendDurationMinutes ?? 45}</p>
                 <p className="text-xs text-slate-500 mt-0.5">분</p>
               </div>
 
               {/* 대화량 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">대화량</p>
-                <p className="text-2xl font-bold text-slate-900">{activeCounselData.chatLog.length}</p>
+                <p className="text-2xl font-bold text-slate-900">{backendReport?.totalTurnCount ?? activeCounselData.chatLog.length}</p>
                 <p className="text-xs text-slate-500 mt-0.5">개 메시지</p>
               </div>
 
               {/* 핵심 감정 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">핵심 감정</p>
-                <p className="text-2xl font-bold text-slate-900">불안</p>
-                <p className="text-xs text-slate-500 mt-0.5">→ 안심</p>
+                <p className="text-2xl font-bold text-slate-900">{backendReport?.primaryEmotion ?? "불안"}</p>
+                {/* <p className="text-xs text-slate-500 mt-0.5">
+                  {backendReport ? `${backendReport.initialEmotion || "-"} → ${backendReport.finalEmotion || "-"}` : "→ 안심"}
+                </p> */}
               </div>
             </div>
           </section>
@@ -302,6 +416,9 @@ export default function SessionAnalysisPage() {
                   <Zap size={20} className="text-brand-green" />
                   <h2 className="text-lg font-bold text-slate-900">AI 상담 인사이트</h2>
                 </div>
+                {backendReport ? (
+                  <AISessionInsight summary={insightSummary} />
+                ) : (
                 <AISessionInsight
                   summary={{
                     emotion: { before: "불안함", after: "자신감" },
@@ -310,6 +427,7 @@ export default function SessionAnalysisPage() {
                     action: "회의 전 준비 사항을 일일이 확인하는 루틴 유지하기"
                   }}
                 />
+                )}
               </section>
 
               {/* 5단계 아코디언 */}
@@ -318,7 +436,7 @@ export default function SessionAnalysisPage() {
                   <Heart size={20} className="text-brand-green" />
                   <h2 className="text-lg font-bold text-slate-900">상담 흐름 (5단계 CBT)</h2>
                 </div>
-                <CounselStageAccordion stages={CBT_STAGES} />
+                <CounselStageAccordion stages={backendDisplayStages} />
               </section>
 
               {/* AI 키워드 분석 (좌측 최하단) */}
