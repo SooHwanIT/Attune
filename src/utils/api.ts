@@ -110,9 +110,14 @@ export interface InitiateCounselResponse {
 
 export const initiateCounsel = async (data: InitiateCounselRequest): Promise<InitiateCounselResponse> => {
   try {
-    const response = await apiClient.post<InitiateCounselResponse>("/counsel/initiate", data);
+    void data;
+    const response = await apiClient.post<{ ticketId: string }>("/counseling/sessions");
 
-    return response.data;
+    return {
+      success: true,
+      sessionId: response.data.ticketId,
+      message: "상담 세션 입장권이 발급되었습니다.",
+    };
   } catch (error) {
     const apiError = toApiError(error);
     return {
