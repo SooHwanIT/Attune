@@ -511,7 +511,7 @@ export default function CounselPage() {
           logTest("소켓:초기질문");
           const message = payload.message || "상담을 시작하겠습니다.";
           setChatLog((prev) => [...prev, { role: "assistant", text: message }]);
-          setCurrentAnimation("greeting");
+          setCurrentAnimation("standMotion");
           try {
             const audioData = await getVoice(message);
             await audioPlayer.play(audioData);

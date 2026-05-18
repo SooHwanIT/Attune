@@ -425,7 +425,7 @@ export default function CounselTestPage() {
 
     setIsListening(true);
     setLoading(true);
-    setCurrentAnimation("greeting");
+    setCurrentAnimation("standMotion");
     setEmotion("neutral");
     setChatLog((prev) => [...prev, { role: "user", text: turn.user }]);
 
@@ -434,7 +434,7 @@ export default function CounselTestPage() {
       setChatLog((prev) => [...prev, { role: "assistant", text: turn.assistant }]);
       setStageHistory((prev) => [...prev, { stage: currentStage, content: turn.stage.content, summary: turn.stage.summary }]);
       setCurrentStage((prev) => Math.min(STAGES.length, prev + 1));
-      setCurrentAnimation(turn.animation);
+      setCurrentAnimation("standMotion");
       setEmotion(turn.emotion);
       stopDemoTurn();
     }, 1200);
@@ -445,7 +445,7 @@ export default function CounselTestPage() {
     if (!text || isTestSpeaking) return;
 
     setIsTestSpeaking(true);
-    setCurrentAnimation("greeting");
+    setCurrentAnimation("standMotion");
     setEmotion("happy");
     setChatLog((prev) => [...prev, { role: "assistant", text }]);
 
@@ -456,14 +456,14 @@ export default function CounselTestPage() {
 
       await audioPlayer.play(wavBuffer, () => {
         setIsTestSpeaking(false);
-        setCurrentAnimation("idle");
+        setCurrentAnimation("standMotion");
         setEmotion("neutral");
       });
 
       setTestSpeakText("");
     } catch {
       setIsTestSpeaking(false);
-      setCurrentAnimation("idle");
+      setCurrentAnimation("standMotion");
       setEmotion("neutral");
     }
   }, [isTestSpeaking, testSpeakText]);
