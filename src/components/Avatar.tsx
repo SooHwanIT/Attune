@@ -166,24 +166,24 @@ export default function Avatar({
 
       loadAnimationByNameRef.current = loadAction;
 
-      // 초기 체감 성능을 위해 idle만 우선 로딩/재생
-      const idleAction = await loadAction("idle");
-      if (idleAction) {
-        idleAction.play();
-        currentActionRef.current = idleAction;
+      // 초기 체감 성능을 위해 currentAnimation 우선 로딩/재생
+      const currentAction = await loadAction(currentAnimation);
+      if (currentAction) {
+        currentAction.play();
+        currentActionRef.current = currentAction;
       }
 
       // 나머지 애니메이션은 백그라운드에서 순차 로딩
       void (async () => {
         for (const name of Object.keys(ANIMATION_FILES) as AnimationKey[]) {
-          if (name === "idle") continue;
+          if (name === currentAnimation) continue;
           await loadAction(name);
         }
       })();
     };
 
     void loadAllAnimations();
-  }, [vrm]); // vrm이 로드된 후에 실행
+  }, [vrm, currentAnimation]); // vrm이 로드된 후에 실행, currentAnimation 변경 시에도 재실행
 
   // 3. 애니메이션 전환 (CrossFade) - 기존 코드 유지
   useEffect(() => {

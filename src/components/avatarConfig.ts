@@ -1,4 +1,5 @@
 export const ANIMATION_FILES = {
+  standMotion: "/animations/StandMotion.vrma",
   idle: "/animations/idle.vrma",
   greeting: "/animations/greeting.vrma",
   vSignCute: "/animations/pose1_v_sign_cute.vrma",
