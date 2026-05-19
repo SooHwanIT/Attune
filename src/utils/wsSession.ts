@@ -7,6 +7,14 @@ type CounselSocketSession = {
 let activeCounselSocketSession: CounselSocketSession | null = null;
 
 export function setActiveCounselSocket(socket: WebSocket, clientId: string) {
+  if (activeCounselSocketSession?.socket && activeCounselSocketSession.socket !== socket) {
+    try {
+      activeCounselSocketSession.socket.close();
+    } catch {
+      // no-op
+    }
+  }
+
   activeCounselSocketSession = {
     clientId,
     socket,
