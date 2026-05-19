@@ -46,8 +46,21 @@ export type PageResponse<T> = {
   empty: boolean;
 };
 
+function isSessionTicketResponse(data: unknown): data is SessionTicketResponse {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "ticketId" in data &&
+    typeof (data as { ticketId?: unknown }).ticketId === "string" &&
+    (data as { ticketId: string }).ticketId.trim().length > 0
+  );
+}
+
 export async function startCounselingSessionApi(): Promise<SessionTicketResponse> {
-  const response = await apiClient.post<SessionTicketResponse>("/counseling/sessions");
+  const response = await apiClient.post<unknown>("/counseling/sessions");
+  if (!isSessionTicketResponse(response.data)) {
+    throw new Error("상담 입장권 응답 형식이 올바르지 않습니다.");
+  }
   return response.data;
 }
 
