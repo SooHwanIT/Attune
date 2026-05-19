@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -229,13 +229,6 @@ const CONTENT_PROMPTS: ContentPrompt[] = [
   },
 ];
 
-function buildClientId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props) {
   const navigate = useNavigate();
 
@@ -257,6 +250,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
   const [permissionState, setPermissionState] = useState<PermissionState>("unknown");
   const [hasCheckedDevices, setHasCheckedDevices] = useState(false);
   const [isConnectingSocket, setIsConnectingSocket] = useState(false);
+  const [isStartingCounsel, setIsStartingCounsel] = useState(false);
   const [socketError, setSocketError] = useState("");
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
@@ -317,8 +311,10 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
     setDeviceError("");
     setPermissionState("prompt");
 
+    // ✅ CRITICAL FIX: 루프 전 기존 스트림을 즉시 정리
+    stopPreviewStream();
+
     try {
-      stopPreviewStream();
       let hasVideoInput: boolean | null = null;
       let hasAudioInput: boolean | null = null;
 
@@ -337,8 +333,9 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
               deviceId: device.deviceId,
             })),
           });
-        } catch {
-          logDebug("deviceCheck:enumerateDevicesFailed");
+        } catch (enumError) {
+          logDebug("deviceCheck:enumerateDevicesFailed", enumError);
+          // 계속 진행
         }
       }
 
@@ -357,12 +354,16 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
           logDebug("deviceCheck:getUserMediaSuccess", constraints);
           break;
         } catch (error) {
+          // ✅ CRITICAL FIX: 루프 중 생성된 stream이 있으면 정리
+          if (stream) {
+            stream.getTracks().forEach((track) => track.stop());
+            stream = null;
+          }
           lastError = error;
           const errName = error instanceof DOMException ? error.name : "unknown";
           logDebug("deviceCheck:getUserMediaFailed", {
             constraints,
             errName,
-            error,
           });
         }
       }
@@ -379,6 +380,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       const hasAudioTrack = Boolean(audioTrack);
 
       if (!hasVideoTrack && !hasAudioTrack) {
+        stream.getTracks().forEach((track) => track.stop());
         throw new Error("No usable media tracks");
       }
 
@@ -414,6 +416,8 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       });
     } catch (error) {
       console.error("Failed to access media devices", error);
+      // ✅ CRITICAL FIX: 에러 발생 시에도 스트림 정리 확실히
+      stopPreviewStream();
       setDeviceCheckState("error");
       const errName = error instanceof DOMException ? error.name : "";
       if (errName === "NotAllowedError" || errName === "SecurityError") {
@@ -445,7 +449,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
     setIsCameraEnabled(videoTrack.enabled);
   }, []);
 
-  const connectCounselSocket = useCallback(async () => {
+  const connectCounselSocket = useCallback(async (ticketId: string) => {
     setSocketError("");
     setIsConnectingSocket(true);
 
@@ -455,22 +459,25 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       throw new Error("Missing VITE_COUNSEL_WS_BASE_URL");
     }
 
-    const clientId = buildClientId();
-    const wsUrl = `${COUNSEL_WS_BASE_URL}/${encodeURIComponent(clientId)}`;
+    const wsUrl = `${COUNSEL_WS_BASE_URL}/${encodeURIComponent(ticketId)}`;
     const socket = new WebSocket(wsUrl);
-    logDebug("socket:connectStart", { clientId, wsUrl });
+    logDebug("socket:connectStart", { ticketId, wsUrl });
 
     try {
       await new Promise<void>((resolve, reject) => {
         let settled = false;
+        let cleanup = () => {
+          // Assigned after handlers are declared.
+        };
         const timeoutId = window.setTimeout(() => {
           if (settled) return;
           settled = true;
-          logDebug("socket:timeout", { ms: 8000, clientId });
+          cleanup();
+          logDebug("socket:timeout", { ms: 8000, ticketId });
           reject(new Error("상담 서버 연결 시간이 초과되었습니다."));
         }, 8000);
 
-        const cleanup = () => {
+        cleanup = () => {
           window.clearTimeout(timeoutId);
           socket.removeEventListener("open", handleOpen);
           socket.removeEventListener("message", handleMessage);
@@ -486,7 +493,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
         };
 
         const handleOpen = () => {
-          logDebug("socket:open", { clientId, readyState: socket.readyState });
+          logDebug("socket:open", { ticketId, readyState: socket.readyState });
         };
 
         const handleMessage = (event: MessageEvent<string>) => {
@@ -500,6 +507,10 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
               cleanup();
               logDebug("socket:connectedAck", payload);
               resolve();
+              return;
+            }
+            if (isAuthFailedSocketPayload(payload)) {
+              finalizeReject(new Error(payload.message || "상담 세션 인증에 실패했습니다."));
             }
           } catch {
             logDebug("socket:messageParseFailed", event.data);
@@ -507,13 +518,13 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
         };
 
         const handleError = () => {
-          logDebug("socket:errorEvent", { clientId, readyState: socket.readyState });
+          logDebug("socket:errorEvent", { ticketId, readyState: socket.readyState });
           finalizeReject(new Error("상담 서버 연결에 실패했습니다."));
         };
 
         const handleClose = (event: CloseEvent) => {
           logDebug("socket:closeEvent", {
-            clientId,
+            ticketId,
             code: event.code,
             reason: event.reason,
             wasClean: event.wasClean,
@@ -527,9 +538,9 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
         socket.addEventListener("close", handleClose);
       });
 
-      setActiveCounselSocket(socket, clientId);
-      logDebug("socket:storedInSession", { clientId });
-      return clientId;
+      setActiveCounselSocket(socket, ticketId);
+      logDebug("socket:storedInSession", { ticketId });
+      return ticketId;
     } catch (error) {
       try {
         socket.close();
@@ -537,15 +548,17 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
         // 연결 실패 후 정리 과정에서 발생하는 예외는 사용자 액션에 영향을 주지 않습니다.
       }
       clearActiveCounselSocket(false);
-      logDebug("socket:connectFailed", { clientId, error });
+      logDebug("socket:connectFailed", { ticketId, error });
       throw error;
     } finally {
       setIsConnectingSocket(false);
-      logDebug("socket:connectEnd", { clientId });
+      logDebug("socket:connectEnd", { ticketId });
     }
   }, [logDebug]);
 
   const handleNext = useCallback(async () => {
+    if (isStartingCounsel) return;
+
     logDebug("step:nextClicked", {
       currentStep,
       topicValue,
@@ -553,6 +566,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       contentLength: counselContent.trim().length,
       deviceCheckState,
       isConnectingSocket,
+      isStartingCounsel,
     });
 
     if (currentStep === "welcome") {
@@ -579,9 +593,12 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       return;
     }
 
+    setIsStartingCounsel(true);
+    setSocketError("");
+
     try {
       const ticketResponse = await startCounselingSessionApi();
-      const wsClientId = await connectCounselSocket();
+      const wsClientId = await connectCounselSocket(ticketResponse.ticketId);
       logDebug("step:socketReadyNavigate", { wsClientId, ticketId: ticketResponse.ticketId });
 
       stopPreviewStream();
@@ -603,10 +620,12 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
         },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "상담 서버 연결에 실패했습니다.";
+      const message = error instanceof Error ? error.message : "상담 시작에 실패했습니다.";
       setSocketError(message);
       logDebug("step:socketConnectFailed", { message, error });
-      window.alert(message);
+      // ✅ CAUTION FIX: window.alert 제거 - DeviceCheckStep에서 socketError로 표시됨
+    } finally {
+      setIsStartingCounsel(false);
     }
   }, [
     connectCounselSocket,
@@ -618,6 +637,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
     isConnectingSocket,
     isContentValid,
     isMicEnabled,
+    isStartingCounsel,
     isTopicValid,
     logDebug,
     navigate,
@@ -636,6 +656,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
   }, [currentStep, logDebug]);
 
   const isNextDisabled =
+    isStartingCounsel ||
     (currentStep === "topic" && !isTopicValid) ||
     (currentStep === "mood" && !selectedMood) ||
     (currentStep === "content" && !isContentValid) ||
@@ -678,6 +699,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
       setDeviceError("");
       setSocketError("");
       setIsConnectingSocket(false);
+      setIsStartingCounsel(false);
       setPermissionState("unknown");
       setIsMicAvailable(null);
       setIsCameraAvailable(null);
@@ -733,8 +755,16 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
           <X size={20} />
         </button>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <StepInfoPanel currentStep={currentStep} stepNumber={stepNumber} />
+        <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)]">
+          <MemoizedStepInfoPanel
+            currentStep={currentStep}
+            stepNumber={stepNumber}
+            selectedTopic={selectedTopic}
+            customTopic={customTopic}
+            selectedMood={selectedMood}
+            selectedPromptId={selectedPromptId}
+            counselContent={counselContent}
+          />
 
           <div className="flex min-h-0 flex-col bg-white">
             <header className="border-b border-slate-100/40 bg-gradient-to-b from-white to-slate-50/20 px-5 py-4 sm:px-7">
@@ -790,7 +820,7 @@ export default function PreCounselModal({ isOpen, onClose, initialTopic }: Props
             <ModalFooter
               currentStep={currentStep}
               isNextDisabled={isNextDisabled}
-              isConnectingSocket={isConnectingSocket}
+              isConnectingSocket={isConnectingSocket || isStartingCounsel}
               onBack={handleBack}
               onNext={handleNext}
             />
@@ -805,16 +835,67 @@ function isConnectedSocketPayload(payload: unknown): payload is { status: "conne
   return typeof payload === "object" && payload !== null && "status" in payload && payload.status === "connected";
 }
 
-function StepInfoPanel({ currentStep, stepNumber }: { currentStep: Step; stepNumber: number }) {
+function isAuthFailedSocketPayload(payload: unknown): payload is { status: "auth_failed"; message?: string } {
+  return typeof payload === "object" && payload !== null && "status" in payload && payload.status === "auth_failed";
+}
+
+function StepInfoPanel({
+  currentStep,
+  stepNumber,
+  selectedTopic,
+  customTopic,
+  selectedMood,
+  selectedPromptId,
+  counselContent,
+}: {
+  currentStep: Step;
+  stepNumber: number;
+  selectedTopic: string | null;
+  customTopic: string;
+  selectedMood: string | null;
+  selectedPromptId: string;
+  counselContent: string;
+}) {
   const meta = STEP_META[currentStep];
   const Icon = meta.icon;
+  
+  // 선택 정보 조회 헬퍼
+  const getTopicLabel = useCallback(() => {
+    if (!selectedTopic) return null;
+    if (selectedTopic === CUSTOM_TOPIC_LABEL) return customTopic;
+    const topic = TOPIC_OPTIONS.find(t => t.label === selectedTopic);
+    return topic?.label || null;
+  }, [selectedTopic, customTopic]);
+  
+  const getMoodLabel = useCallback(() => {
+    if (!selectedMood) return null;
+    const mood = MOOD_OPTIONS.find(m => m.id === selectedMood);
+    return mood?.label || null;
+  }, [selectedMood]);
+  
+  const getMoodDescription = useCallback(() => {
+    if (!selectedMood) return null;
+    const mood = MOOD_OPTIONS.find(m => m.id === selectedMood);
+    return mood?.description || null;
+  }, [selectedMood]);
+  
+  const getMoodIcon = useCallback(() => {
+    if (!selectedMood) return null;
+    const mood = MOOD_OPTIONS.find(m => m.id === selectedMood);
+    return mood?.icon || null;
+  }, [selectedMood]);
+  
+  const getPromptLabel = useCallback(() => {
+    const prompt = CONTENT_PROMPTS.find(p => p.id === selectedPromptId);
+    return prompt?.label || null;
+  }, [selectedPromptId]);
 
   return (
-    <aside className="relative hidden overflow-hidden border-r border-slate-100/40 bg-gradient-to-b from-slate-50 to-white p-7 text-slate-900 lg:flex lg:flex-col">
+    <aside className="relative flex overflow-hidden border-r border-slate-100/40 bg-gradient-to-b from-slate-50 to-white p-7 text-slate-900 flex-col">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(30,215,96,0.08),transparent_34%),radial-gradient(circle_at_80%_0%,rgba(83,157,245,0.04),transparent_28%),linear-gradient(155deg,rgba(0,0,0,0.01),transparent_46%)]" />
       <div className="absolute bottom-16 left-0 right-0 h-96 rounded-t-3xl border-t border-slate-200/20 bg-gradient-to-t from-brand-green/6 via-brand-green/3 to-transparent" />
 
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex h-full flex-col overflow-y-auto">
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-xs font-bold text-brand-green">
           
           상담 준비
@@ -831,15 +912,48 @@ function StepInfoPanel({ currentStep, stepNumber }: { currentStep: Step; stepNum
           <p className="mt-4 text-sm leading-6 text-slate-600">{meta.description}</p>
         </div>
 
-        <div className="mt-8 rounded-lg border border-slate-100/50 bg-white/50 p-4">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <Lightbulb size={16} className="text-brand-green" />
-            선택 팁
+        {/* 선택 정보 표시 */}
+        {currentStep !== "welcome" && (
+          <div className="mt-6 space-y-4">
+            <p className="text-xs font-bold uppercase text-slate-500">선택된 정보</p>
+            
+            {/* Topic 정보 */}
+            {getTopicLabel() && (
+              <div className="rounded-lg border border-slate-200/60 bg-white/80 p-3">
+                <p className="text-xs font-semibold text-slate-600">📌 주제</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{getTopicLabel()}</p>
+              </div>
+            )}
+            
+            {/* Mood 정보 */}
+            {selectedMood && (
+              <div className="rounded-lg border border-slate-200/60 bg-white/80 p-3">
+                <p className="text-xs font-semibold text-slate-600">💭 마음 상태</p>
+                <div className="mt-2 flex items-center gap-2">
+                  {getMoodIcon() && (() => {
+                    const MoodIcon = getMoodIcon() as LucideIcon;
+                    return <MoodIcon size={16} className="text-slate-600" />;
+                  })()}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-900">{getMoodLabel()}</p>
+                    <p className="text-xs text-slate-500">{getMoodDescription()}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Content Prompt & Content 정보 */}
+            {counselContent && getPromptLabel() && (
+              <div className="rounded-lg border border-slate-200/60 bg-white/80 p-3">
+                <p className="text-xs font-semibold text-slate-600">✍️ 작성 내용</p>
+                <p className="mt-2 text-xs font-medium text-slate-700">{getPromptLabel()}</p>
+                <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-700">{counselContent}</p>
+              </div>
+            )}
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-600">{meta.tip}</p>
-        </div>
+        )}
 
-        <div className="relative z-10 mt-auto">
+        <div className="relative z-10 mt-auto pt-6">
           <p className="text-xs font-semibold text-slate-500">
             {currentStep === "welcome" ? "상담 준비 전 안내" : `${Math.max(stepNumber, 1)} / 4 단계 진행 중`}
           </p>
@@ -862,6 +976,8 @@ function StepInfoPanel({ currentStep, stepNumber }: { currentStep: Step; stepNum
     </aside>
   );
 }
+
+const MemoizedStepInfoPanel = memo(StepInfoPanel);
 
 function StepIndicator({ currentStep, progressPercent }: { currentStep: Step; progressPercent: number }) {
   return (
