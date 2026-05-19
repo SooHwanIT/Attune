@@ -208,6 +208,15 @@ const CounselStageAccordion = ({ stages }: { stages: DisplayStage[] }) => {
   );
 };
 
+function emotionLabelToScore(label: string | null | undefined): number {
+  const norm = (label ?? "").toLowerCase().trim();
+  if (["happy", "긍정", "행복", "기쁨"].some((k) => norm.includes(k))) return 80;
+  if (["neutral", "중립", "평온", "안정", "안도"].some((k) => norm.includes(k))) return 55;
+  if (["sad", "우울", "슬픔"].some((k) => norm.includes(k))) return 35;
+  if (["fear", "불안", "공포", "angry", "분노", "화", "걱정"].some((k) => norm.includes(k))) return 20;
+  return 50;
+}
+
 export default function SessionAnalysisPage() {
   const location = useLocation();
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -215,12 +224,15 @@ export default function SessionAnalysisPage() {
   const persistedSession = sessionId ? getSessionRecordById(sessionId) : null;
   const activeCounselData = persistedSession ?? counselData ?? DUMMY_COUNSEL_DATA;
   const backendSessionId = useMemo(() => {
+    // counselData가 state로 전달된 경우는 데모/프리뷰 세션 — 백엔드 호출 스킵
+    if (counselData) return null;
     const parsed = Number(sessionId);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }, [sessionId]);
+  }, [sessionId, counselData]);
   const [backendReport, setBackendReport] = useState<CounselingReportDetail | null>(null);
-  const [isBackendLoading, setIsBackendLoading] = useState(false);
+  const [isBackendLoading, setIsBackendLoading] = useState(() => backendSessionId !== null);
   const [backendError, setBackendError] = useState("");
+  const [reportNotFound, setReportNotFound] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -234,6 +246,7 @@ export default function SessionAnalysisPage() {
 
       setIsBackendLoading(true);
       setBackendError("");
+      setReportNotFound(false);
 
       try {
         const response = await getCounselingReportDetailApi(backendSessionId);
@@ -242,8 +255,15 @@ export default function SessionAnalysisPage() {
         }
       } catch (loadError) {
         if (active) {
+          const err = toApiError(loadError);
           setBackendReport(null);
-          setBackendError(toApiError(loadError).message);
+          if (err.status === 404) {
+            setReportNotFound(true);
+            setBackendError("");
+          } else {
+            setReportNotFound(false);
+            setBackendError(err.message);
+          }
         }
       } finally {
         if (active) {
@@ -314,8 +334,34 @@ export default function SessionAnalysisPage() {
     return `${year}.${month}.${day} 상담 세션`;
   }, [persistedSession?.createdAt]);
 
-  const initialEmotion = analysisData.emotionScores[0] ?? 50;
-  const finalEmotion = analysisData.emotionScores[analysisData.emotionScores.length - 1] ?? 50;
+  const initialEmotion = backendReport
+    ? emotionLabelToScore(backendReport.initialEmotion)
+    : (analysisData.emotionScores[0] ?? 50);
+  const finalEmotion = backendReport
+    ? emotionLabelToScore(backendReport.finalEmotion || backendReport.primaryEmotion)
+    : (analysisData.emotionScores[analysisData.emotionScores.length - 1] ?? 50);
+  const emotionShift = backendReport
+    ? (() => {
+        const diff = finalEmotion - initialEmotion;
+        return {
+          value: Math.abs(diff),
+          direction: (diff > 5 ? "up" : diff < -5 ? "down" : "stable") as "up" | "down" | "stable",
+        };
+      })()
+    : analysisData.emotionShift;
+  // 세션은 있지만 리포트 레코드가 없는 경우 (404)
+  const isReportPending = !counselData && !backendReport && reportNotFound;
+  // 리포트는 있지만 Python AI 서버가 분석 필드를 채우지 않은 경우
+  const isAiFieldsEmpty = !!backendReport && !backendReport.summary && !backendReport.strengths && !(backendReport.stageDetails?.length);
+
+  const backendKeywords = useMemo(() => {
+    if (!backendReport?.keywords) return [];
+    return backendReport.keywords
+      .split(/[,#\n]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+  }, [backendReport]);
+
   const backendDisplayStages = useMemo<DisplayStage[]>(() => {
     if (!backendReport?.stageDetails?.length) {
       return CBT_STAGES;
@@ -371,7 +417,12 @@ export default function SessionAnalysisPage() {
 
           {!isBackendLoading && backendError && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-              백엔드 리포트를 불러오지 못해 로컬 분석 화면을 표시합니다. {backendError}
+              리포트를 불러오지 못했습니다. {backendError}
+            </div>
+          )}
+          {!isBackendLoading && isReportPending && (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+              이 세션의 AI 분석 리포트가 아직 생성되지 않았습니다. 상담이 완료되면 자동으로 분석됩니다.
             </div>
           )}
           {/* 상단 세션 요약 헤더 - Full Width */}
@@ -384,21 +435,21 @@ export default function SessionAnalysisPage() {
               {/* 상담 소요 시간 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">소요 시간</p>
-                <p className="text-2xl font-bold text-slate-900">{backendDurationMinutes ?? 45}</p>
+                <p className="text-2xl font-bold text-slate-900">{isReportPending ? "-" : (backendDurationMinutes ?? 45)}</p>
                 <p className="text-xs text-slate-500 mt-0.5">분</p>
               </div>
 
               {/* 대화량 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">대화량</p>
-                <p className="text-2xl font-bold text-slate-900">{backendReport?.totalTurnCount ?? activeCounselData.chatLog.length}</p>
+                <p className="text-2xl font-bold text-slate-900">{isReportPending ? "-" : (backendReport?.totalTurnCount ?? activeCounselData.chatLog.length)}</p>
                 <p className="text-xs text-slate-500 mt-0.5">개 메시지</p>
               </div>
 
               {/* 핵심 감정 */}
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">핵심 감정</p>
-                <p className="text-2xl font-bold text-slate-900">{backendReport?.primaryEmotion ?? "불안"}</p>
+                <p className="text-2xl font-bold text-slate-900">{isReportPending ? "-" : (backendReport?.primaryEmotion ?? "불안")}</p>
                 {/* <p className="text-xs text-slate-500 mt-0.5">
                   {backendReport ? `${backendReport.initialEmotion || "-"} → ${backendReport.finalEmotion || "-"}` : "→ 안심"}
                 </p> */}
@@ -416,17 +467,16 @@ export default function SessionAnalysisPage() {
                   <Zap size={20} className="text-brand-green" />
                   <h2 className="text-lg font-bold text-slate-900">AI 상담 인사이트</h2>
                 </div>
-                {backendReport ? (
+                {backendReport && !isAiFieldsEmpty ? (
                   <AISessionInsight summary={insightSummary} />
+                ) : isReportPending || isAiFieldsEmpty ? (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-400">
+                    {isAiFieldsEmpty
+                      ? "AI 분석 데이터가 아직 채워지지 않았습니다. Python AI 서버의 분석 결과를 기다리는 중입니다."
+                      : "상담 리포트가 생성되면 AI 인사이트를 확인할 수 있습니다."}
+                  </div>
                 ) : (
-                <AISessionInsight
-                  summary={{
-                    emotion: { before: "불안함", after: "자신감" },
-                    story: "업무 회의에서의 불안감과 자기 의심",
-                    insight: "오늘 상담을 통해 당신의 불안감이 실은 준비 부족에서 비롯된 게 아니라, 완벽함을 추구하는 당신의 강점이라는 걸 발견했어요. 객관적 준비 상황 재평가 및 체크리스트 작성",
-                    action: "회의 전 준비 사항을 일일이 확인하는 루틴 유지하기"
-                  }}
-                />
+                  <AISessionInsight summary={insightSummary} />
                 )}
               </section>
 
@@ -436,11 +486,19 @@ export default function SessionAnalysisPage() {
                   <Heart size={20} className="text-brand-green" />
                   <h2 className="text-lg font-bold text-slate-900">상담 흐름 (5단계 CBT)</h2>
                 </div>
-                <CounselStageAccordion stages={backendDisplayStages} />
+                {isReportPending || isAiFieldsEmpty ? (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-400">
+                    {isAiFieldsEmpty
+                      ? "AI 분석 데이터가 채워지면 단계별 상담 흐름을 확인할 수 있습니다."
+                      : "상담 리포트가 생성되면 단계별 상담 흐름을 확인할 수 있습니다."}
+                  </div>
+                ) : (
+                  <CounselStageAccordion stages={backendDisplayStages} />
+                )}
               </section>
 
-              {/* AI 키워드 분석 (좌측 최하단) */}
-              {analysisData.keywordInsights.length > 0 && (
+              {/* 핵심 키워드 */}
+              {!isReportPending && (backendKeywords.length > 0 || analysisData.keywordInsights.length > 0) && (
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Zap size={20} className="text-brand-green" />
@@ -448,16 +506,26 @@ export default function SessionAnalysisPage() {
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap gap-2.5">
-                    {analysisData.keywordInsights.slice(0, 12).map((keyword) => (
-                      <span
-                        key={`${keyword.keyword}-${keyword.category}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-green hover:border-brand-green/40 hover:bg-brand-green/10 transition cursor-default"
-                      >
-                        #{keyword.keyword}
-                        <span className="text-[10px] text-slate-500 opacity-70 bg-slate-200 px-1.5 rounded-md">{keyword.count}</span>
-                      </span>
-                    ))}
-                  </div>
+                      {backendKeywords.length > 0
+                        ? backendKeywords.map((keyword) => (
+                            <span
+                              key={keyword}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-green hover:border-brand-green/40 hover:bg-brand-green/10 transition cursor-default"
+                            >
+                              #{keyword}
+                            </span>
+                          ))
+                        : analysisData.keywordInsights.slice(0, 12).map((keyword) => (
+                            <span
+                              key={`${keyword.keyword}-${keyword.category}`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-green hover:border-brand-green/40 hover:bg-brand-green/10 transition cursor-default"
+                            >
+                              #{keyword.keyword}
+                              <span className="text-[10px] text-slate-500 opacity-70 bg-slate-200 px-1.5 rounded-md">{keyword.count}</span>
+                            </span>
+                          ))
+                      }
+                    </div>
                   </div>
                 </section>
               )}
@@ -466,11 +534,11 @@ export default function SessionAnalysisPage() {
             {/* 우측: Sticky 사이드바 */}
             <div className="xl:col-span-5 space-y-5 xl:sticky xl:top-4 xl:h-fit">
               {/* AI 감정 분석 */}
-              {analysisData.emotionScores.length > 0 && (
+              {(backendReport || analysisData.emotionScores.length > 0) && (
                 <EmotionSnapshot
                   initialEmotion={initialEmotion}
                   finalEmotion={finalEmotion}
-                  shift={analysisData.emotionShift}
+                  shift={emotionShift}
                 />
               )}
 

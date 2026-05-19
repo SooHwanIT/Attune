@@ -41,7 +41,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 
 const CATEGORIES = ["전체", ...Object.keys(CATEGORY_COLORS)];
 
-// 카테고리별 메타데이터
+// 카테고리별 메타데이터 (백엔드에 category/difficulty/duration 필드 없음 — ID 기반 매핑)
 const CONTENT_METADATA: Record<number, { category: string; image: string; difficulty: Difficulty; duration: Duration }> = {
   1: { category: "마음챙김", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
   2: { category: "수면", image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
@@ -51,21 +51,47 @@ const CONTENT_METADATA: Record<number, { category: string; image: string; diffic
   6: { category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "15분" },
 };
 
+const FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop",
+];
+const DIFFICULTY_CYCLE: Difficulty[] = ["초급", "초급", "중급", "중급", "고급"];
+const DURATION_CYCLE: Duration[] = ["5분", "10분", "10분", "15분", "20분"];
+const CATEGORY_LIST = Object.keys(CATEGORY_COLORS);
+
+function inferCategoryFromKeywords(keywords: string[]): string | null {
+  for (const kw of keywords) {
+    const match = CATEGORY_LIST.find((cat) => kw.includes(cat) || cat.includes(kw));
+    if (match) return match;
+  }
+  return null;
+}
+
+function getContentMetadata(id: number, keywords: string[]): { category: string; image: string; difficulty: Difficulty; duration: Duration } {
+  const known = CONTENT_METADATA[id];
+  if (known) return known;
+
+  const idx = (id - 1) % CATEGORY_LIST.length;
+  return {
+    category: inferCategoryFromKeywords(keywords) ?? CATEGORY_LIST[idx],
+    image: FALLBACK_IMAGES[(id - 1) % FALLBACK_IMAGES.length],
+    difficulty: DIFFICULTY_CYCLE[(id - 1) % DIFFICULTY_CYCLE.length],
+    duration: DURATION_CYCLE[(id - 1) % DURATION_CYCLE.length],
+  };
+}
+
 // API 응답을 ContentPost로 변환
 function mapApiContentToPost(apiContent: ContentResponse): ContentPost {
-  const metadata = CONTENT_METADATA[apiContent.id] || {
-    category: "마음챙김",
-    image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
-    difficulty: "초급" as const,
-    duration: "10분" as const,
-  };
-
   return {
     id: String(apiContent.id),
     title: apiContent.title,
     excerpt: apiContent.briefDescription,
     keywords: apiContent.keywords,
-    ...metadata,
+    ...getContentMetadata(apiContent.id, apiContent.keywords),
   };
 }
 

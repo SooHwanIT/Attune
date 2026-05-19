@@ -13,7 +13,6 @@ import {
   Edit3,
   HeartHandshake,
   HeartPulse,
-  Lightbulb,
   Mic,
   Moon,
   RefreshCw,
