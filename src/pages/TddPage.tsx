@@ -13,10 +13,70 @@ const IMPORTANCE_STYLE: Record<TddImportance, string> = {
   하: "text-[#535353]",
 };
 
+const normalizeQuestion = (question: string) =>
+  question
+    .toLowerCase()
+    .replace(/[^ㄱ-힣a-z0-9\s]/gi, "")
+    .split(/\s+/)
+    .filter(Boolean);
+
+const calculateSimilarity = (a: string, b: string) => {
+  const tokensA = new Set(normalizeQuestion(a));
+  const tokensB = new Set(normalizeQuestion(b));
+  const commonTokens = [...tokensA].filter((token) => tokensB.has(token)).length;
+  return commonTokens / Math.max(tokensA.size, tokensB.size, 1);
+};
+
+const orderItemsBySimilarity = (items: TddItem[]) => {
+  if (items.length <= 1) return items;
+
+  const remaining = [...items];
+  const startIndex = remaining.reduce((bestIndex, item, index) => {
+    const avgSimilarity = remaining.reduce((sum, other) => {
+      if (item === other) return sum;
+      return sum + calculateSimilarity(item.question, other.question);
+    }, 0) / (remaining.length - 1);
+
+    return avgSimilarity >
+      (remaining[bestIndex]
+        ? remaining.reduce((sum, other) => {
+            if (remaining[bestIndex] === other) return sum;
+            return sum + calculateSimilarity(remaining[bestIndex].question, other.question);
+          }, 0) / (remaining.length - 1)
+        : -1)
+      ? index
+      : bestIndex;
+  }, 0);
+
+  const ordered = [remaining.splice(startIndex, 1)[0]];
+
+  while (remaining.length > 0) {
+    const last = ordered[ordered.length - 1];
+    let bestIndex = 0;
+    let bestScore = -1;
+
+    remaining.forEach((item, index) => {
+      const score = calculateSimilarity(last.question, item.question);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    ordered.push(remaining.splice(bestIndex, 1)[0]);
+  }
+
+  return ordered;
+};
+
 export default function TddPage() {
   const [activeTab, setActiveTab] = useState(tddData[0].id);
 
   const currentCategory = tddData.find((c) => c.id === activeTab)!;
+  const sortedItems = useMemo(
+    () => orderItemsBySimilarity(currentCategory.items),
+    [currentCategory]
+  );
 
   const stats = useMemo(() => {
     const all = tddData.flatMap((c) => c.items);

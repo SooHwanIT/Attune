@@ -19,7 +19,7 @@ export const tddData: TddCategory[] = [
   {
     id: 'user',
     icon: '👤',
-    name: '유저',
+    name: '인증/유저',
     items: [
       { id: 'u-1', question: '로그인이 이루어지는가?', importance: '상', status: '완료' },
       { id: 'u-2', question: '회원가입이 이루어지는가?', importance: '상', status: '완료' },
@@ -28,6 +28,7 @@ export const tddData: TddCategory[] = [
       { id: 'u-5', question: '비로그인 상태에서 보호 페이지 접근이 차단되는가?', importance: '상', status: '완료' },
       { id: 'u-6', question: '401 응답 수신 시 인증 정보가 초기화되고 로그인 페이지로 이동되는가?', importance: '상', status: '완료' },
       { id: 'u-7', question: '마이페이지에서 프로필 정보가 조회되는가?', importance: '중', status: '완료' },
+      { id: 'u-8', question: '도메인 설정과 HTTPS/WSS 도메인이 올바르게 구성되어 있는가?', importance: '상', status: '완료' },
     ],
   },
   {

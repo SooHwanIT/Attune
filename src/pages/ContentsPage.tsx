@@ -344,6 +344,7 @@ function ContentCard({ post, isFeatured = false }: { post: ContentPost; isFeatur
           alt={post.title}
           className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           loading="lazy"
+          onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
         />
         {/* Featured 강조 뱃지 */}
         {isFeatured && (

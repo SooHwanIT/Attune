@@ -65,6 +65,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
   우울감: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop",
   스트레스해소: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop",
 };
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop";
 
 function formatDuration(minutes: number): "5분" | "10분" | "15분" | "20분" {
   const valid = ["5분", "10분", "15분", "20분"] as const;
@@ -242,7 +243,12 @@ export default function ContentDetailPage() {
         <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {/* 커버 이미지 */}
           <div className="relative overflow-hidden bg-slate-100 h-80 md:h-96">
-            <img src={post.image} alt={post.title} className="h-full w-full object-cover" />
+            <img
+              src={post.image}
+              alt={post.title}
+              className="h-full w-full object-cover"
+              onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+            />
           </div>
 
           {/* 메타정보 & 제목 */}
