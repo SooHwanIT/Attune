@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useState } from "react";
 import Header from "../components/Header";
 
-const HEADER_HIDDEN_PATHS = new Set(["/test", "/test/mic", "/test/counsel"]);
+const HEADER_HIDDEN_PATHS = new Set(["/test", "/test/mic", "/test/counsel", "/tdd"]);
 
 
 export default function Layout() {

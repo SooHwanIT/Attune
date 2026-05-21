@@ -23,6 +23,7 @@ const TestPosePage = lazy(() => import("./pages/TestPosePage"));
 const TestMicPage = lazy(() => import("./pages/TestMicPage"));
 const TestTtsSampleBuilderPage = lazy(() => import("./pages/TestTtsSampleBuilderPage"));
 const PreCounselModalTestPage = lazy(() => import("./pages/test/PreCounselModalTestPage"));
+const TddPage = lazy(() => import("./pages/TddPage"));
 
 export default function App() {
   // Global scroll listener for custom auto-hiding scrollbar
@@ -80,6 +81,7 @@ export default function App() {
             <Route path="test/counsel" element={<DevOnlyRoute><CounselTestPage /></DevOnlyRoute>} />
             <Route path="test/tts-builder" element={<DevOnlyRoute><TestTtsSampleBuilderPage /></DevOnlyRoute>} />
             <Route path="test/pre-counsel-modal" element={<DevOnlyRoute><PreCounselModalTestPage /></DevOnlyRoute>} />
+            <Route path="tdd" element={<TddPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
