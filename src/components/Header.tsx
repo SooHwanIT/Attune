@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { key: "analysis", label: "분석", path: "/analysis", protected: true },
   { key: "contents", label: "콘텐츠", path: "/contents", protected: false },
   { key: "mypage", label: "마이페이지", path: "/mypage", protected: true },
+  { key: "tdd", label: "TDD", path: "/tdd", protected: false },
 ];
 
 export default function Header() {
