@@ -1,12 +1,26 @@
 import { apiClient } from "./httpClient";
 
+// 목록 조회용 (백엔드 ContentSummaryResponse 매핑)
+export type ContentSummaryResponse = {
+  id: number;
+  title: string;
+  briefDescription: string;
+  keywords: string[];
+  category: string;       // "MINDFULNESS", "SLEEP", ...
+  difficulty: string;     // "BEGINNER", "INTERMEDIATE", "ADVANCED"
+  durationMinutes: number;
+};
+
+// 상세 조회용 (백엔드 ContentResponse 매핑)
 export type ContentResponse = {
   id: number;
   title: string;
   briefDescription: string;
   keywords: string[];
   description: string;
-  createdAt: string;
+  category: string;
+  difficulty: string;
+  durationMinutes: number;
 };
 
 export type ContentCreateRequest = {
@@ -14,11 +28,18 @@ export type ContentCreateRequest = {
   briefDescription: string;
   keywords: string[];
   description: string;
+  category: string;
+  difficulty: string;
+  durationMinutes: number;
 };
 
-export async function listContentsApi(): Promise<ContentResponse[]> {
-  const response = await apiClient.get<ContentResponse[]>("/contents");
-  return response.data;
+// 백엔드가 Page<T> 래퍼로 응답할 수 있으므로 배열/페이지 모두 처리
+export async function listContentsApi(): Promise<ContentSummaryResponse[]> {
+  const response = await apiClient.get("/contents");
+  const data = response.data;
+  if (Array.isArray(data)) return data;
+  if (data?.content && Array.isArray(data.content)) return data.content;
+  return [];
 }
 
 export async function getContentDetailApi(contentId: number | string): Promise<ContentResponse> {

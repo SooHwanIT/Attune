@@ -1,10 +1,9 @@
 // Router entrypoint rendered from `main.tsx`
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DevOnlyRoute from "./components/DevOnlyRoute";
-
-const Layout = lazy(() => import("./pages/Layout"));
+import Layout from "./pages/Layout";
 const MainPage = lazy(() => import("./pages/MainPage"));
 const MyPage = lazy(() => import("./pages/MyPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -60,9 +59,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-stone-500">Loading...</div>}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
             <Route index element={<MainPage />} />
             <Route path="counsel/prepare" element={<ProtectedRoute><CounselWaitingPage /></ProtectedRoute>} />
             <Route path="counsel" element={<ProtectedRoute><CounselPage /></ProtectedRoute>} />
@@ -85,7 +83,6 @@ export default function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
-      </Suspense>
     </BrowserRouter>
   );
 }

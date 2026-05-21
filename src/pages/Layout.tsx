@@ -1,6 +1,16 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Header from "../components/Header";
+
+function PageLoadFallback() {
+  return (
+    <div className="w-full bg-white" style={{ minHeight: "100%" }}>
+      <div className="relative h-[2px] overflow-hidden bg-stone-100">
+        <div className="absolute h-full w-2/5 bg-[#39A61B]/60 animate-nav-progress" />
+      </div>
+    </div>
+  );
+}
 
 const HEADER_HIDDEN_PATHS = new Set(["/test", "/test/mic", "/test/counsel", "/tdd"]);
 
@@ -16,7 +26,9 @@ export default function Layout() {
     <div className="h-screen flex flex-col">
       {showGlobalHeader && <Header />}
       <main className="flex-1 bg-white overflow-y-auto">
-        <Outlet />
+        <Suspense fallback={<PageLoadFallback />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Floating test navigator (bottom-left) */}

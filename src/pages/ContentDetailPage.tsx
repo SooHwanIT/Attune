@@ -31,34 +31,61 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
   관계: { bg: "bg-pink-50", text: "text-pink-600", border: "border-pink-200" },
   직장: { bg: "bg-red-50", text: "text-red-600", border: "border-red-200" },
   자존감: { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
+  불안관리: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-200" },
+  우울감: { bg: "bg-indigo-50", text: "text-indigo-600", border: "border-indigo-200" },
+  스트레스해소: { bg: "bg-rose-50", text: "text-rose-600", border: "border-rose-200" },
 };
 
-// 카테고리별 색상 및 메타데이터 매핑
-const CONTENT_METADATA: Record<number, { category: string; image: string; difficulty: "초급" | "중급" | "고급"; duration: "5분" | "10분" | "15분" | "20분" }> = {
-  1: { category: "마음챙김", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
-  2: { category: "수면", image: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "10분" },
-  3: { category: "감정관리", image: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
-  4: { category: "관계", image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "10분" },
-  5: { category: "직장", image: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop", difficulty: "초급", duration: "5분" },
-  6: { category: "자존감", image: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop", difficulty: "중급", duration: "15분" },
+const CATEGORY_MAP: Record<string, string> = {
+  MINDFULNESS: "마음챙김",
+  SLEEP: "수면",
+  EMOTION_MANAGEMENT: "감정관리",
+  RELATIONSHIP: "관계",
+  WORK: "직장",
+  SELF_ESTEEM: "자존감",
+  ANXIETY_MANAGEMENT: "불안관리",
+  DEPRESSION: "우울감",
+  STRESS_RELIEF: "스트레스해소",
 };
+
+const DIFFICULTY_MAP: Record<string, "초급" | "중급" | "고급"> = {
+  BEGINNER: "초급",
+  INTERMEDIATE: "중급",
+  ADVANCED: "고급",
+};
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  마음챙김: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
+  수면: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop",
+  감정관리: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop",
+  관계: "https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=800&auto=format&fit=crop",
+  직장: "https://images.unsplash.com/photo-1488228469209-c141f8bcd723?q=80&w=800&auto=format&fit=crop",
+  자존감: "https://images.unsplash.com/photo-1506869640319-a1a5606089e1?q=80&w=800&auto=format&fit=crop",
+  불안관리: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
+  우울감: "https://images.unsplash.com/photo-1511295742362-92c96b1cf484?q=80&w=800&auto=format&fit=crop",
+  스트레스해소: "https://images.unsplash.com/photo-1447452001602-7090c7ab2ad3?q=80&w=800&auto=format&fit=crop",
+};
+
+function formatDuration(minutes: number): "5분" | "10분" | "15분" | "20분" {
+  const valid = ["5분", "10분", "15분", "20분"] as const;
+  const label = `${minutes}분` as "5분" | "10분" | "15분" | "20분";
+  return valid.includes(label) ? label : "10분";
+}
 
 // API 응답을 ContentPost로 변환
-function mapApiResponseToPost(apiResponse: ContentResponse): ContentPost {
-  const metadata = CONTENT_METADATA[apiResponse.id] || {
-    category: "마음챙김",
-    image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
-    difficulty: "초급" as const,
-    duration: "10분" as const,
-  };
-
+function mapApiResponseToPost(api: ContentResponse): ContentPost {
+  const category = CATEGORY_MAP[api.category] ?? api.category ?? "마음챙김";
+  const difficulty = DIFFICULTY_MAP[api.difficulty] ?? "초급";
   return {
-    id: String(apiResponse.id),
-    title: apiResponse.title,
-    excerpt: apiResponse.briefDescription,
-    content: apiResponse.description,
-    keywords: apiResponse.keywords,
-    ...metadata,
+    id: String(api.id),
+    title: api.title,
+    excerpt: api.briefDescription ?? "",
+    content: api.description,
+    keywords: api.keywords ?? [],
+    category,
+    difficulty,
+    duration: formatDuration(api.durationMinutes ?? 10),
+    image: CATEGORY_IMAGES[category] ?? "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
   };
 }
 
